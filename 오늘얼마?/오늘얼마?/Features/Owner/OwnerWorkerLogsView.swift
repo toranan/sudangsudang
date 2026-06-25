@@ -12,7 +12,7 @@ struct OwnerWorkerLogsView: View {
         let id: UUID
         let check_in_at: String
         let check_out_at: String?
-        let status: String
+        let status: String?
     }
 
     @State private var logs: [LogRow] = []
@@ -56,6 +56,9 @@ struct OwnerWorkerLogsView: View {
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("근무 내역")
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await loadLogs()
+        }
         .task {
             await loadLogs()
         }
@@ -110,7 +113,10 @@ struct OwnerWorkerLogsView: View {
                 .value
             logs = rows
         } catch {
-            loadError = error.localizedDescription
+            if AppErrorMessage.isCancellation(error) {
+                return
+            }
+            loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
@@ -121,22 +127,30 @@ struct OwnerWorkerLogsView: View {
         let iso = ISO8601DateFormatter()
 
         let start = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
-        let end = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) } ?? Date()
-        let minutes = max(0, Int(floor(end.timeIntervalSince(start) / 60.0)))
+        let isOpen = log.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
+        let parsedEnd = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
+        let minutes = (isOpen || parsedEnd == nil) ? 0 : max(0, Int(floor((parsedEnd?.timeIntervalSince(start) ?? 0) / 60.0)))
 
         let df = DateFormatter()
         df.dateFormat = "M월 d일 HH:mm"
         let startText = df.string(from: start)
-        let endText = log.check_out_at == nil ? "진행 중" : df.string(from: end)
+        let endText = (isOpen || parsedEnd == nil) ? "진행 중" : df.string(from: parsedEnd ?? start)
         return (minutes, "\(startText) - \(endText)")
     }
 
-    private func statusLabel(_ status: String) -> String {
-        status == "approved" ? "승인" : (status == "rejected" ? "반려" : "대기")
+    private func normalizedStatus(_ status: String?) -> String {
+        let value = status?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? "pending" : value
     }
 
-    private func statusColor(_ status: String) -> Color {
-        status == "approved" ? .appPositive : (status == "rejected" ? .appWarning : .appTextSecondary)
+    private func statusLabel(_ status: String?) -> String {
+        let value = normalizedStatus(status)
+        return value == "approved" ? "승인" : (value == "rejected" ? "반려" : "대기")
+    }
+
+    private func statusColor(_ status: String?) -> Color {
+        let value = normalizedStatus(status)
+        return value == "approved" ? .appPositive : (value == "rejected" ? .appWarning : .appTextSecondary)
     }
 
     private func formatHours(_ minutes: Int) -> String {

@@ -6,6 +6,7 @@ import Supabase
 extension Notification.Name {
     static let didLogout = Notification.Name("didLogout")
     static let payrollSettingsDidChange = Notification.Name("payrollSettingsDidChange")
+    static let appDidBecomeActive = Notification.Name("appDidBecomeActive")
 }
 
 struct ContentView: View {
@@ -62,6 +63,7 @@ struct ContentView: View {
             // the invite notification can be missed during the transition.
             if phase == .active {
                 Task { await loadPendingInviteIfNeeded() }
+                NotificationCenter.default.post(name: .appDidBecomeActive, object: nil)
             }
         }
         .onChange(of: isLoggedIn) { _ in
@@ -123,7 +125,7 @@ struct ContentView: View {
             ProfileCompletionSheet(
                 context: .init(
                     title: "프로필을 설정할까요?",
-                    message: "사장님과의 연동을 위해 이름 입력이 필요해요. 전화번호는 선택입니다.",
+                    message: "사장님과의 연동을 위해 이름 입력이 필요해요. 전화번호도 입력할 수 있어요.",
                     primaryActionTitle: "저장하고 수락",
                     showsSkip: false,
                     requiresName: true
@@ -261,7 +263,7 @@ struct ContentView: View {
                 userRole = nil
                 activeAlert = .inviteError(message: "로그인이 꼬였어요. 다시 로그인해주세요.")
             } else {
-                activeAlert = .inviteError(message: error.localizedDescription)
+                activeAlert = .inviteError(message: AppErrorMessage.userMessage(error))
             }
         }
         #else
@@ -282,7 +284,7 @@ struct ContentView: View {
             self.activeAlert = nil
             NotificationCenter.default.post(name: .didAcceptInvite, object: nil)
         } catch {
-            activeAlert = .inviteError(message: error.localizedDescription)
+            activeAlert = .inviteError(message: AppErrorMessage.userMessage(error))
         }
         #endif
     }

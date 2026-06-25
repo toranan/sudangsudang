@@ -23,15 +23,17 @@ final class SupabaseManager {
     private init() {
         let urlString = AppConfig.supabaseUrl
         let anonKey = AppConfig.supabaseAnonKey
-
-        guard let url = URL(string: urlString), !anonKey.isEmpty else {
-            fatalError("Invalid Supabase URL.")
+        let fallbackURL = URL(string: "https://invalid.local")!
+        let fallbackAnonKey = anonKey.isEmpty ? "invalid-anon-key" : anonKey
+        let url = URL(string: urlString) ?? fallbackURL
+        if URL(string: urlString) == nil || anonKey.isEmpty {
+            assertionFailure("Invalid Supabase configuration. Check AppConfig.supabaseUrl / supabaseAnonKey.")
         }
 
         self.supabaseURL = url
-        self.supabaseAnonKey = anonKey
+        self.supabaseAnonKey = fallbackAnonKey
         #if canImport(Supabase)
-        self.authClient = SupabaseClient(supabaseURL: url, supabaseKey: anonKey)
+        self.authClient = SupabaseClient(supabaseURL: url, supabaseKey: fallbackAnonKey)
         self.client = self.authClient
         self.customAccessToken = UserDefaults.standard.string(forKey: customAccessTokenKey)
         if let savedUserId = UserDefaults.standard.string(forKey: customUserIdKey) {
@@ -451,26 +453,53 @@ final class SupabaseManager {
 
     func createInvite(storeId: UUID, expiresAt: Date) async throws -> Invite {
         let formatter = ISO8601DateFormatter()
-        let payload = InviteInsert(
-            store_id: storeId,
-            token: generateInviteCode(),
-            expires_at: formatter.string(from: expiresAt)
-        )
-        let row: InviteRow = try await client
-            .from("invites")
-            .insert(payload)
-            .select("id,store_id,token,expires_at")
-            .single()
-            .execute()
-            .value
+        let expiresAtISO = formatter.string(from: expiresAt)
 
-        let parsedDate = formatter.date(from: row.expires_at) ?? expiresAt
-        return Invite(id: row.id, storeId: row.store_id, token: row.token, qrUrl: nil, expiresAt: parsedDate)
+        // 6자리 코드는 충돌 가능성이 있으므로, 유니크 충돌 시 몇 번 재시도한다.
+        for _ in 0..<5 {
+            let payload = InviteInsert(
+                store_id: storeId,
+                token: generateInviteCode(),
+                expires_at: expiresAtISO
+            )
+
+            do {
+                let row: InviteRow = try await client
+                    .from("invites")
+                    .insert(payload)
+                    .select("id,store_id,token,expires_at")
+                    .single()
+                    .execute()
+                    .value
+
+                let parsedDate = formatter.date(from: row.expires_at) ?? expiresAt
+                return Invite(id: row.id, storeId: row.store_id, token: row.token, qrUrl: nil, expiresAt: parsedDate)
+            } catch {
+                if isInviteTokenConflict(error) {
+                    continue
+                }
+                throw error
+            }
+        }
+
+        throw NSError(
+            domain: "Invite",
+            code: 409,
+            userInfo: [NSLocalizedDescriptionKey: "초대코드 생성이 일시적으로 실패했어요. 다시 시도해주세요."]
+        )
     }
 
     private func generateInviteCode() -> String {
         let digits = Array("0123456789")
         return String((0..<6).compactMap { _ in digits.randomElement() })
+    }
+
+    private func isInviteTokenConflict(_ error: Error) -> Bool {
+        let message = error.localizedDescription.lowercased()
+        return message.contains("duplicate key") ||
+            message.contains("already exists") ||
+            message.contains("23505") ||
+            message.contains("invites_token_key")
     }
 
     func acceptInvite(token: String) async throws {
@@ -483,6 +512,12 @@ final class SupabaseManager {
         #if DEBUG
         print("DEBUG: acceptInvite rpc success. token=\(token)")
         #endif
+    }
+
+    func retireWorkerLink(workerId: UUID) async throws {
+        _ = try await client
+            .rpc("retire_worker_link", params: ["p_worker_id": workerId.uuidString])
+            .execute()
     }
     #endif
 }

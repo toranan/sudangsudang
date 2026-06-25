@@ -18,12 +18,13 @@ struct StatsView: View {
         let id: UUID
         let check_in_at: String
         let check_out_at: String?
+        let status: String?
         let worker_id: UUID
         let workers: LogWorker?
     }
 
     struct DaySummary: Identifiable {
-        let id = UUID()
+        var id: Date { date }
         let date: Date
         let totalMinutes: Int
         let totalPay: Double
@@ -31,7 +32,7 @@ struct StatsView: View {
     }
 
     struct WorkRow: Identifiable {
-        let id = UUID()
+        let id: UUID
         let name: String
         let minutes: Int
         let pay: Double
@@ -42,12 +43,14 @@ struct StatsView: View {
     @State private var currentMonth: Date = Date()
     @State private var summaries: [DaySummary] = []
     @State private var selectedDate: Date?
+    @State private var isLoadingStores = false
     @State private var isLoading = false
+    @State private var isUserRefreshing = false
     @State private var loadError: String?
     @State private var lastStoresLoadedAt: Date?
     @State private var lastMonthLoadedAt: Date?
     @State private var lastMonthKey: String?
-    private let cacheTTLSeconds: TimeInterval = 45
+    private let cacheTTLSeconds: TimeInterval = 120
 
     private let calendar = Calendar.current
     private let isoFormatter = ISO8601DateFormatter()
@@ -57,19 +60,30 @@ struct StatsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 if !stores.isEmpty {
                     storePicker
-                }
-
-                monthHeader
-
-                calendarGrid
-
-                if let selected = selectedDate, let summary = summaries.first(where: { calendar.isDate($0.date, inSameDayAs: selected) }) {
-                    dayDetail(summary: summary)
+                } else if isLoadingStores {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .appCard()
                 } else {
-                    Text("날짜를 선택하면 근무 내역이 보여요.")
+                    Text("등록된 매장이 없어요.")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(.appTextSecondary)
                         .appCard()
+                }
+
+                if !stores.isEmpty {
+                    monthHeader
+
+                    calendarGrid
+
+                    if let selected = selectedDate, let summary = summaries.first(where: { calendar.isDate($0.date, inSameDayAs: selected) }) {
+                        dayDetail(summary: summary)
+                    } else {
+                        Text("날짜를 선택하면 근무 내역이 보여요.")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundColor(.appTextSecondary)
+                            .appCard()
+                    }
                 }
 
                 if let loadError {
@@ -82,8 +96,9 @@ struct StatsView: View {
             .padding(.vertical, 12)
         }
         .refreshable {
-            await refresh(force: true)
+            await refreshFromUser()
         }
+        .refreshStatusOverlay(isVisible: isUserRefreshing)
         .background(Color.appBackground.ignoresSafeArea())
         .task {
             await refresh(force: false)
@@ -93,6 +108,9 @@ struct StatsView: View {
         }
         .onChange(of: currentMonth) { _ in
             Task { await loadMonth(force: false) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
+            Task { await refresh(force: false) }
         }
     }
 
@@ -157,7 +175,7 @@ struct StatsView: View {
             }
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
-                ForEach(days, id: \.id) { item in
+                ForEach(days) { item in
                     if let date = item.date {
                         let isSelected = selectedDate.map { calendar.isDate($0, inSameDayAs: date) } ?? false
                         let summary = summaries.first(where: { calendar.isDate($0.date, inSameDayAs: date) })
@@ -254,23 +272,30 @@ struct StatsView: View {
         let firstWeekday = calendar.component(.weekday, from: start)
         let leadingEmpty = (firstWeekday + 6) % 7
 
-        for _ in 0..<leadingEmpty {
-            items.append(MonthDay(date: nil))
+        for index in 0..<leadingEmpty {
+            items.append(MonthDay(id: "leading-\(index)", date: nil))
         }
         for day in range {
             if let date = calendar.date(byAdding: .day, value: day - 1, to: start) {
-                items.append(MonthDay(date: date))
+                items.append(MonthDay(id: "day-\(day)", date: date))
             }
         }
         while items.count % 7 != 0 {
-            items.append(MonthDay(date: nil))
+            items.append(MonthDay(id: "trailing-\(items.count)", date: nil))
         }
         return items
     }
 
     private struct MonthDay: Identifiable {
-        let id = UUID()
+        let id: String
         let date: Date?
+    }
+
+    @MainActor
+    private func refreshFromUser() async {
+        isUserRefreshing = true
+        defer { isUserRefreshing = false }
+        await refresh(force: true)
     }
 
     @MainActor
@@ -282,11 +307,15 @@ struct StatsView: View {
            now.timeIntervalSince(lastStoresLoadedAt) < cacheTTLSeconds {
             return
         }
+        isLoadingStores = true
+        defer { isLoadingStores = false }
         do {
+            let ownerId = try await SupabaseManager.shared.currentUserId()
             let result: [Store] = try await SupabaseManager.shared
                 .client
                 .from("stores")
                 .select()
+                .eq("owner_id", value: ownerId.uuidString)
                 .execute()
                 .value
             stores = result.map { StoreOption(id: $0.id, name: $0.name) }
@@ -295,7 +324,10 @@ struct StatsView: View {
             }
             self.lastStoresLoadedAt = now
         } catch {
-            loadError = error.localizedDescription
+            if AppErrorMessage.isCancellation(error) {
+                return
+            }
+            loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
@@ -323,7 +355,7 @@ struct StatsView: View {
             let rows: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,check_in_at,check_out_at,worker_id,workers(name,hourly_wage)")
+                .select("id,check_in_at,check_out_at,status,worker_id,workers(name,hourly_wage)")
                 .eq("store_id", value: storeId.uuidString)
                 .gte("check_in_at", value: startISO)
                 .lt("check_in_at", value: endISO)
@@ -331,13 +363,17 @@ struct StatsView: View {
                 .value
 
             summaries = buildSummaries(from: rows)
-            if selectedDate == nil {
-                selectedDate = summaries.first?.date
+            if selectedDate == nil ||
+                selectedDate.map({ !calendar.isDate($0, equalTo: currentMonth, toGranularity: .month) }) == true {
+                selectedDate = summaries.first?.date ?? start
             }
             self.lastMonthLoadedAt = now
             self.lastMonthKey = key
         } catch {
-            loadError = error.localizedDescription
+            if AppErrorMessage.isCancellation(error) {
+                return
+            }
+            loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
@@ -359,15 +395,20 @@ struct StatsView: View {
         dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
         for row in rows {
+            let status = row.status ?? "pending"
+            let hasCheckout = !(row.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            guard status == "approved", hasCheckout else { continue }
+
             let checkIn = dateFormatter.date(from: row.check_in_at) ?? isoFormatter.date(from: row.check_in_at) ?? Date()
             let checkOut = row.check_out_at.flatMap { dateFormatter.date(from: $0) ?? isoFormatter.date(from: $0) }
+            guard let checkOut else { continue }
             let minutes = calcMinutes(checkIn: checkIn, checkOut: checkOut)
             let name = row.workers?.name ?? "알바"
             let wage = row.workers?.hourly_wage ?? 0
             let pay = Double(minutes) / 60.0 * wage
 
             let day = calendar.startOfDay(for: checkIn)
-            byDay[day, default: []].append(WorkRow(name: name, minutes: minutes, pay: pay))
+            byDay[day, default: []].append(WorkRow(id: row.id, name: name, minutes: minutes, pay: pay))
         }
 
         let summaries = byDay.map { (date, rows) -> DaySummary in

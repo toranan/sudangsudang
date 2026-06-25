@@ -27,6 +27,8 @@
 - hourly_wage (numeric)
 - apply_weekly_allowance (bool)
 - deduction_type (text, 'withholding_3_3' | 'four_insurance')
+- apply_night_allowance (bool)
+- payday (smallint, 1..31)
 - is_active (bool)
 - joined_at (timestamptz)
 

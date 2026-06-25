@@ -46,10 +46,12 @@ struct HowMuchTodayApp: App {
                     _ = AuthController.handleOpenUrl(url: url)
                     #endif
                     InviteManager.shared.handleIncomingURL(url)
+                    WorkerDeepLinkManager.shared.handleIncomingURL(url)
                 }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     guard let url = activity.webpageURL else { return }
                     InviteManager.shared.handleIncomingURL(url)
+                    WorkerDeepLinkManager.shared.handleIncomingURL(url)
                 }
         }
     }

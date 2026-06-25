@@ -19,7 +19,7 @@ struct ApprovalView: View {
         let worker_id: UUID
         let check_in_at: String
         let check_out_at: String?
-        let status: String
+        let status: String?
         let workers: WorkerInfo?
     }
 
@@ -28,11 +28,12 @@ struct ApprovalView: View {
     @State private var pending: [LogRow] = []
     @State private var recent: [LogRow] = []
     @State private var isLoading = false
+    @State private var isUserRefreshing = false
     @State private var loadError: String?
     @State private var lastStoresLoadedAt: Date?
     @State private var lastLogsLoadedAt: Date?
     @State private var lastLogsStoreId: UUID?
-    private let cacheTTLSeconds: TimeInterval = 45
+    private let cacheTTLSeconds: TimeInterval = 120
 
     var body: some View {
         ScrollView {
@@ -43,7 +44,7 @@ struct ApprovalView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     SectionHeader(title: "대기 중")
-                    if isLoading {
+                    if isLoading && pending.isEmpty && recent.isEmpty {
                         ProgressView()
                             .frame(maxWidth: .infinity, alignment: .center)
                             .appCard()
@@ -57,8 +58,9 @@ struct ApprovalView: View {
                             ForEach(pending) { item in
                                 VStack(alignment: .leading, spacing: 10) {
                                     HStack {
-                                        Text(item.workers?.name ?? "알바생")
+                                        Text(workerDisplayName(item))
                                             .font(.system(size: 17, weight: .bold, design: .rounded))
+                                            .foregroundColor(.appTextPrimary)
                                         Spacer()
                                         Text(formatRange(item))
                                             .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -77,6 +79,13 @@ struct ApprovalView: View {
                                             Task { await updateStatus(item, status: "approved") }
                                         }) { Text("승인") }
                                         .buttonStyle(PrimaryButtonStyle())
+                                        .disabled(!hasCheckout(item))
+                                        .opacity(hasCheckout(item) ? 1.0 : 0.5)
+                                    }
+                                    if !hasCheckout(item) {
+                                        Text("퇴근 처리 후 승인할 수 있어요.")
+                                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                                            .foregroundColor(.appWarning)
                                     }
                                 }
                                 .appCard()
@@ -95,13 +104,23 @@ struct ApprovalView: View {
                     } else {
                         VStack(spacing: 10) {
                             ForEach(recent) { item in
-                                HStack {
-                                    Text(item.workers?.name ?? "알바생")
-                                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                    Spacer()
-                                    Text(item.status == "approved" ? "승인" : "반려")
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Text(workerDisplayName(item))
+                                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                            .foregroundColor(.appTextPrimary)
+                                        Spacer()
+                                        StatusPill(
+                                            text: normalizedStatus(item.status) == "approved" ? "승인" : "반려",
+                                            color: normalizedStatus(item.status) == "approved" ? .appPositive : .appWarning
+                                        )
+                                    }
+                                    Text(formatRange(item))
                                         .font(.system(size: 12, weight: .medium, design: .rounded))
-                                        .foregroundColor(item.status == "approved" ? .appPositive : .appWarning)
+                                        .foregroundColor(.appTextSecondary)
+                                    Text(formatDetail(item))
+                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .foregroundColor(.appTextSecondary)
                                 }
                                 .padding(12)
                                 .background(Color.appSurface)
@@ -125,14 +144,18 @@ struct ApprovalView: View {
             .padding(.vertical, 12)
         }
         .refreshable {
-            await refresh(force: true)
+            await refreshFromUser()
         }
+        .refreshStatusOverlay(isVisible: isUserRefreshing)
         .background(Color.appBackground.ignoresSafeArea())
         .task {
             await refresh(force: false)
         }
         .onChange(of: selectedStoreId) { _ in
             Task { await loadLogs(force: false) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
+            Task { await refresh(force: false) }
         }
     }
 
@@ -161,6 +184,13 @@ struct ApprovalView: View {
     }
 
     @MainActor
+    private func refreshFromUser() async {
+        isUserRefreshing = true
+        defer { isUserRefreshing = false }
+        await refresh(force: true)
+    }
+
+    @MainActor
     private func loadStores(force: Bool) async {
         #if canImport(Supabase)
         let now = Date()
@@ -170,10 +200,12 @@ struct ApprovalView: View {
             return
         }
         do {
+            let ownerId = try await SupabaseManager.shared.currentUserId()
             let result: [Store] = try await SupabaseManager.shared
                 .client
                 .from("stores")
                 .select()
+                .eq("owner_id", value: ownerId.uuidString)
                 .execute()
                 .value
             stores = result.map { StoreOption(id: $0.id, name: $0.name) }
@@ -182,7 +214,10 @@ struct ApprovalView: View {
             }
             self.lastStoresLoadedAt = now
         } catch {
-            loadError = error.localizedDescription
+            if AppErrorMessage.isCancellation(error) {
+                return
+            }
+            loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
@@ -216,12 +251,18 @@ struct ApprovalView: View {
                 .execute()
                 .value
 
-            pending = rows.filter { $0.status == "pending" }
-            recent = rows.filter { $0.status == "approved" || $0.status == "rejected" }.prefix(10).map { $0 }
+            pending = rows.filter { normalizedStatus($0.status) == "pending" }
+            recent = rows.filter {
+                let status = normalizedStatus($0.status)
+                return status == "approved" || status == "rejected"
+            }.prefix(10).map { $0 }
             self.lastLogsLoadedAt = now
             self.lastLogsStoreId = storeId
         } catch {
-            loadError = error.localizedDescription
+            if AppErrorMessage.isCancellation(error) {
+                return
+            }
+            loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
@@ -235,6 +276,10 @@ struct ApprovalView: View {
     @MainActor
     private func updateStatus(_ item: LogRow, status: String) async {
         #if canImport(Supabase)
+        if status == "approved", !hasCheckout(item) {
+            loadError = "퇴근 처리된 기록만 승인할 수 있어요."
+            return
+        }
         do {
             let ownerId = try await SupabaseManager.shared.currentUserId()
             struct UpdatePayload: Encodable {
@@ -256,9 +301,23 @@ struct ApprovalView: View {
                 .execute()
             await loadLogs(force: true)
         } catch {
-            loadError = error.localizedDescription
+            loadError = AppErrorMessage.userMessage(error)
         }
         #endif
+    }
+
+    private func hasCheckout(_ item: LogRow) -> Bool {
+        !(item.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
+    private func normalizedStatus(_ status: String?) -> String {
+        let value = status?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? "pending" : value
+    }
+
+    private func workerDisplayName(_ item: LogRow) -> String {
+        let trimmed = item.workers?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "알바생" : trimmed
     }
 
     private func formatRange(_ item: LogRow) -> String {

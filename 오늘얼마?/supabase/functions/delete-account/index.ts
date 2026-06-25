@@ -28,32 +28,76 @@ Deno.serve(async (req) => {
   }
 
   // Collect related records.
-  const { data: workerRows } = await supabase
+  const { data: workerRows, error: workerRowsError } = await supabase
     .from("workers")
     .select("id")
     .eq("user_id", userId);
+  if (workerRowsError) {
+    return new Response(`Load workers failed: ${workerRowsError.message}`, { status: 500 });
+  }
   const workerIds = (workerRows ?? []).map((row: { id: string }) => row.id);
 
-  const { data: storeRows } = await supabase
+  const { data: storeRows, error: storeRowsError } = await supabase
     .from("stores")
     .select("id")
     .eq("owner_id", userId);
+  if (storeRowsError) {
+    return new Response(`Load stores failed: ${storeRowsError.message}`, { status: 500 });
+  }
   const storeIds = (storeRows ?? []).map((row: { id: string }) => row.id);
 
   if (workerIds.length > 0) {
-    await supabase.from("work_logs").delete().in("worker_id", workerIds);
+    const { error } = await supabase.from("work_logs").delete().in("worker_id", workerIds);
+    if (error) {
+      return new Response(`Delete worker logs failed: ${error.message}`, { status: 500 });
+    }
   }
 
   if (storeIds.length > 0) {
-    await supabase.from("invites").delete().in("store_id", storeIds);
-    await supabase.from("work_logs").delete().in("store_id", storeIds);
-    await supabase.from("workers").delete().in("store_id", storeIds);
-    await supabase.from("stores").delete().eq("owner_id", userId);
+    {
+      const { error } = await supabase.from("invites").delete().in("store_id", storeIds);
+      if (error) {
+        return new Response(`Delete invites failed: ${error.message}`, { status: 500 });
+      }
+    }
+    {
+      const { error } = await supabase.from("work_logs").delete().in("store_id", storeIds);
+      if (error) {
+        return new Response(`Delete store logs failed: ${error.message}`, { status: 500 });
+      }
+    }
+    {
+      const { error } = await supabase.from("workers").delete().in("store_id", storeIds);
+      if (error) {
+        return new Response(`Delete store workers failed: ${error.message}`, { status: 500 });
+      }
+    }
+    {
+      const { error } = await supabase.from("stores").delete().eq("owner_id", userId);
+      if (error) {
+        return new Response(`Delete stores failed: ${error.message}`, { status: 500 });
+      }
+    }
   }
 
-  await supabase.from("workers").delete().eq("user_id", userId);
-  await supabase.from("work_logs").delete().eq("approved_by", userId);
-  await supabase.from("profiles").delete().eq("id", userId);
+  {
+    const { error } = await supabase.from("workers").delete().eq("user_id", userId);
+    if (error) {
+      return new Response(`Delete worker link failed: ${error.message}`, { status: 500 });
+    }
+  }
+  {
+    const { error } = await supabase.from("work_logs").delete().eq("approved_by", userId);
+    if (error) {
+      return new Response(`Delete approvals failed: ${error.message}`, { status: 500 });
+    }
+  }
+  {
+    const { error } = await supabase.from("profiles").delete().eq("id", userId);
+    if (error) {
+      return new Response(`Delete profile failed: ${error.message}`, { status: 500 });
+    }
+  }
 
   const { error: authDeleteError } = await supabase.auth.admin.deleteUser(userId);
   if (authDeleteError) {

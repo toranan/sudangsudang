@@ -97,3 +97,58 @@ struct Invite: Codable, Identifiable {
         case expiresAt = "expires_at"
     }
 }
+
+enum WorkerGrowthLevel: String, CaseIterable {
+    case seedling = "새싹"
+    case junior = "주니어"
+    case pro = "프로"
+    case ace = "에이스"
+    case veteran = "베테랑"
+
+    static func from(joinedAt: Date, now: Date = Date(), calendar: Calendar = .current) -> WorkerGrowthLevel {
+        let months = max(0, calendar.dateComponents([.month], from: joinedAt, to: now).month ?? 0)
+        switch months {
+        case 0..<3:
+            return .seedling
+        case 3..<6:
+            return .junior
+        case 6..<12:
+            return .pro
+        case 12..<24:
+            return .ace
+        default:
+            return .veteran
+        }
+    }
+}
+
+struct WorkerEvaluationSummary {
+    let level: WorkerGrowthLevel
+    let hasSincerityMark: Bool
+    let scheduledCount: Int
+    let absentRate: Double
+    let lateRate: Double
+    let ownerRating: Double?
+}
+
+enum WorkerEvaluationPolicy {
+    static let absentRateThreshold: Double = 3.0
+    static let lateRateThreshold: Double = 5.0
+    static let ownerRatingThreshold: Double = 4.0
+    static let minimumScheduledCountForMark: Int = 8
+
+    static func shouldGrantSincerityMark(
+        isActive: Bool,
+        scheduledCount: Int,
+        absentRate: Double,
+        lateRate: Double,
+        ownerRating: Double?
+    ) -> Bool {
+        guard isActive else { return false }
+        guard scheduledCount >= minimumScheduledCountForMark else { return false }
+        guard absentRate <= absentRateThreshold else { return false }
+        guard lateRate <= lateRateThreshold else { return false }
+        guard let ownerRating, ownerRating >= ownerRatingThreshold else { return false }
+        return true
+    }
+}

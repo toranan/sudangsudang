@@ -194,7 +194,7 @@ struct AuthView: View {
                         await signInWithApple(idToken: idToken, nonce: nonce)
                     }
                 case .failure(let error):
-                    authError = error.localizedDescription
+                    authError = AppErrorMessage.userMessage(error)
                 }
             })
             .signInWithAppleButtonStyle(.black)
@@ -237,7 +237,7 @@ struct AuthView: View {
             }
             step = .role
         } catch {
-            authError = error.localizedDescription
+            authError = AppErrorMessage.userMessage(error)
         }
         #else
         authError = "Supabase SDK가 설치되지 않았어요."
@@ -255,7 +255,14 @@ struct AuthView: View {
             var randoms = [UInt8](repeating: 0, count: 16)
             let status = SecRandomCopyBytes(kSecRandomDefault, randoms.count, &randoms)
             if status != errSecSuccess {
-                fatalError("Unable to generate nonce. SecRandomCopyBytes failed.")
+                let fallback = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+                for ch in fallback where remainingLength > 0 {
+                    if charset.contains(ch) {
+                        result.append(ch)
+                        remainingLength -= 1
+                    }
+                }
+                continue
             }
 
             randoms.forEach { random in
@@ -321,7 +328,7 @@ struct AuthView: View {
             pendingEmail = response.email
             step = .role
         } catch {
-            authError = error.localizedDescription
+            authError = AppErrorMessage.userMessage(error)
         }
         #else
         authError = "카카오 SDK가 설치되지 않았어요."
@@ -380,9 +387,10 @@ struct AuthView: View {
         userRole = selectedRole
 
         guard let userId = pendingUserId else {
-            // Test bypass without auth
-            SupabaseManager.shared.saveLastRole(selectedRole)
-            isLoggedIn = true
+            await SupabaseManager.shared.signOut()
+            isLoggedIn = false
+            userRole = nil
+            authError = "로그인 정보를 확인하지 못했어요. 다시 로그인해주세요."
             return
         }
 
@@ -400,7 +408,7 @@ struct AuthView: View {
             SupabaseManager.shared.saveLastRole(selectedRole)
             isLoggedIn = true
         } catch {
-            authError = error.localizedDescription
+            authError = AppErrorMessage.userMessage(error)
         }
         #else
         SupabaseManager.shared.saveLastRole(selectedRole)

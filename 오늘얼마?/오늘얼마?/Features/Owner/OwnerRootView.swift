@@ -4,12 +4,13 @@ struct OwnerRootView: View {
     private enum Tab: Hashable {
         case home
         case workers
+        case schedule
         case approval
         case stats
     }
 
     @State private var selection: Tab = .home
-    @AppStorage("did_show_profile_welcome") private var didShowProfileWelcome = false
+    @AppStorage("did_show_profile_welcome_owner") private var didShowProfileWelcome = false
     @State private var isPresentingWelcomeProfileSheet = false
     @State private var welcomeName: String = ""
     @State private var welcomePhone: String = ""
@@ -39,6 +40,16 @@ struct OwnerRootView: View {
             .tag(Tab.workers)
 
             NavigationStack {
+                ScheduleManagementView()
+                    .toolbar(.hidden, for: .navigationBar)
+            }
+            .tabItem {
+                Image(systemName: "calendar.badge.clock")
+                Text("스케줄")
+            }
+            .tag(Tab.schedule)
+
+            NavigationStack {
                 ApprovalView()
                     .toolbar(.hidden, for: .navigationBar)
             }
@@ -66,7 +77,7 @@ struct OwnerRootView: View {
             ProfileCompletionSheet(
                 context: .init(
                     title: "환영합니다!",
-                    message: "원활한 사용을 위해 프로필을 완성할 수 있어요. (선택)",
+                    message: "원활한 사용을 위해 프로필을 완성할 수 있어요.",
                     primaryActionTitle: "완성하기",
                     showsSkip: true
                 ),

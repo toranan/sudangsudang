@@ -8,6 +8,7 @@ struct WorkerCalendarView: View {
         let id: UUID
         let store_id: UUID
         let hourly_wage: Double?
+        let is_active: Bool?
         let stores: StoreInfo?
     }
 
@@ -23,7 +24,7 @@ struct WorkerCalendarView: View {
     }
 
     struct DaySummary: Identifiable {
-        let id = UUID()
+        var id: Date { date }
         let date: Date
         let totalMinutes: Int
         let totalPay: Double
@@ -31,7 +32,7 @@ struct WorkerCalendarView: View {
     }
 
     struct WorkRow: Identifiable {
-        let id = UUID()
+        let id: UUID
         let start: Date
         let end: Date?
         let minutes: Int
@@ -43,13 +44,15 @@ struct WorkerCalendarView: View {
     @State private var currentMonth: Date = Date()
     @State private var summaries: [DaySummary] = []
     @State private var selectedDate: Date?
+    @State private var isLoadingWorkers = false
     @State private var isLoading = false
+    @State private var isUserRefreshing = false
     @State private var loadError: String?
 
     @State private var lastWorkersLoadedAt: Date?
     @State private var lastMonthLoadedAt: Date?
     @State private var lastMonthKey: String?
-    private let cacheTTLSeconds: TimeInterval = 45
+    private let cacheTTLSeconds: TimeInterval = 120
 
     private let calendar = Calendar.current
     private let isoFormatter = ISO8601DateFormatter()
@@ -59,6 +62,10 @@ struct WorkerCalendarView: View {
             VStack(alignment: .leading, spacing: 16) {
                 if !workers.isEmpty {
                     storePicker
+                } else if isLoadingWorkers {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .appCard()
                 } else {
                     Text("등록된 매장이 없어요.")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -66,18 +73,20 @@ struct WorkerCalendarView: View {
                         .appCard()
                 }
 
-                monthHeader
+                if !workers.isEmpty {
+                    monthHeader
 
-                calendarGrid
+                    calendarGrid
 
-                if let selected = selectedDate,
-                   let summary = summaries.first(where: { calendar.isDate($0.date, inSameDayAs: selected) }) {
-                    dayDetail(summary: summary)
-                } else {
-                    Text("날짜를 선택하면 근무 내역이 보여요.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(.appTextSecondary)
-                        .appCard()
+                    if let selected = selectedDate,
+                       let summary = summaries.first(where: { calendar.isDate($0.date, inSameDayAs: selected) }) {
+                        dayDetail(summary: summary)
+                    } else {
+                        Text("날짜를 선택하면 근무 내역이 보여요.")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundColor(.appTextSecondary)
+                            .appCard()
+                    }
                 }
 
                 if let loadError {
@@ -90,8 +99,9 @@ struct WorkerCalendarView: View {
             .padding(.vertical, 12)
         }
         .refreshable {
-            await refresh(force: true)
+            await refreshFromUser()
         }
+        .refreshStatusOverlay(isVisible: isUserRefreshing)
         .background(Color.appBackground.ignoresSafeArea())
         .task {
             await refresh(force: false)
@@ -101,6 +111,15 @@ struct WorkerCalendarView: View {
         }
         .onChange(of: currentMonth) { _ in
             Task { await loadMonth(force: false) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didAcceptInvite)) { _ in
+            Task { await refresh(force: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .payrollSettingsDidChange)) { _ in
+            Task { await refresh(force: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
+            Task { await refresh(force: false) }
         }
     }
 
@@ -166,7 +185,7 @@ struct WorkerCalendarView: View {
             }
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
-                ForEach(days, id: \.id) { item in
+                ForEach(days) { item in
                     if let date = item.date {
                         let isSelected = selectedDate.map { calendar.isDate($0, inSameDayAs: date) } ?? false
                         let summary = summaries.first(where: { calendar.isDate($0.date, inSameDayAs: date) })
@@ -284,23 +303,30 @@ struct WorkerCalendarView: View {
         let firstWeekday = calendar.component(.weekday, from: start)
         let leadingEmpty = (firstWeekday + 6) % 7
 
-        for _ in 0..<leadingEmpty {
-            items.append(MonthDay(date: nil))
+        for index in 0..<leadingEmpty {
+            items.append(MonthDay(id: "leading-\(index)", date: nil))
         }
         for day in range {
             if let date = calendar.date(byAdding: .day, value: day - 1, to: start) {
-                items.append(MonthDay(date: date))
+                items.append(MonthDay(id: "day-\(day)", date: date))
             }
         }
         while items.count % 7 != 0 {
-            items.append(MonthDay(date: nil))
+            items.append(MonthDay(id: "trailing-\(items.count)", date: nil))
         }
         return items
     }
 
     private struct MonthDay: Identifiable {
-        let id = UUID()
+        let id: String
         let date: Date?
+    }
+
+    @MainActor
+    private func refreshFromUser() async {
+        isUserRefreshing = true
+        defer { isUserRefreshing = false }
+        await refresh(force: true)
     }
 
     @MainActor
@@ -318,23 +344,39 @@ struct WorkerCalendarView: View {
            now.timeIntervalSince(lastWorkersLoadedAt) < cacheTTLSeconds {
             return
         }
+        isLoadingWorkers = true
+        defer { isLoadingWorkers = false }
         do {
             let userId = try await SupabaseManager.shared.currentUserId()
+            do {
+                try await WorkerAutoRetirement.processForUser(userId: userId)
+            } catch {
+                if AppErrorMessage.isCancellation(error) {
+                    return
+                }
+                #if DEBUG
+                print("DEBUG: auto retirement (worker calendar) failed: \(error.localizedDescription)")
+                #endif
+            }
             let rows: [WorkerStoreRow] = try await SupabaseManager.shared
                 .client
                 .from("workers")
-                .select("id,store_id,hourly_wage,stores(name)")
+                .select("id,store_id,hourly_wage,is_active,stores(name)")
                 .eq("user_id", value: userId.uuidString)
                 .order("joined_at", ascending: false)
                 .execute()
                 .value
-            workers = rows
-            if selectedWorkerId == nil {
-                selectedWorkerId = workers.first?.id
+            let activeRows = rows.filter { $0.is_active ?? true }
+            workers = activeRows
+            if selectedWorkerId == nil || !activeRows.contains(where: { $0.id == selectedWorkerId }) {
+                selectedWorkerId = activeRows.first?.id
             }
             lastWorkersLoadedAt = now
         } catch {
-            loadError = error.localizedDescription
+            if AppErrorMessage.isCancellation(error) {
+                return
+            }
+            loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
@@ -376,13 +418,17 @@ struct WorkerCalendarView: View {
                 .value
 
             summaries = buildSummaries(from: rows)
-            if selectedDate == nil {
-                selectedDate = summaries.first?.date
+            if selectedDate == nil ||
+                selectedDate.map({ !calendar.isDate($0, equalTo: currentMonth, toGranularity: .month) }) == true {
+                selectedDate = summaries.first?.date ?? start
             }
             lastMonthLoadedAt = now
             lastMonthKey = key
         } catch {
-            loadError = error.localizedDescription
+            if AppErrorMessage.isCancellation(error) {
+                return
+            }
+            loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
@@ -401,7 +447,7 @@ struct WorkerCalendarView: View {
             let minutes = calcMinutes(checkIn: checkIn, checkOut: checkOut)
 
             let day = calendar.startOfDay(for: checkIn)
-            byDay[day, default: []].append(WorkRow(start: checkIn, end: checkOut, minutes: minutes, status: status))
+            byDay[day, default: []].append(WorkRow(id: row.id, start: checkIn, end: checkOut, minutes: minutes, status: status))
         }
 
         let summaries = byDay.map { (date, rows) -> DaySummary in
@@ -446,4 +492,3 @@ private extension WorkerCalendarView.WorkRow {
         }
     }
 }
-

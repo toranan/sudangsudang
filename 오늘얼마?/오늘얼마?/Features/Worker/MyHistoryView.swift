@@ -24,12 +24,14 @@ struct MyHistoryView: View {
         let worker_id: UUID
         let check_in_at: String
         let check_out_at: String?
-        let status: String
+        let status: String?
     }
 
     struct WorkItem: Identifiable {
-        let id = UUID()
+        let id: UUID
+        let startedAt: Date
         let date: String
+        let storeName: String
         let time: String
         let hours: String
         let pay: String
@@ -42,7 +44,10 @@ struct MyHistoryView: View {
     @State private var monthNetPayText: String = "0원"
     @State private var items: [WorkItem] = []
     @State private var isLoading = false
+    @State private var isUserRefreshing = false
     @State private var loadError: String?
+    @State private var lastLoadedAt: Date?
+    private let cacheTTLSeconds: TimeInterval = 120
 
     var body: some View {
         ScrollView {
@@ -77,7 +82,7 @@ struct MyHistoryView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     SectionHeader(title: "최근 근무 기록")
 
-                    if isLoading {
+                    if isLoading && items.isEmpty {
                         ProgressView()
                             .frame(maxWidth: .infinity, alignment: .center)
                             .appCard()
@@ -98,12 +103,13 @@ struct MyHistoryView: View {
                                                 .foregroundColor(.appTextSecondary)
                                         )
                                     VStack(alignment: .leading, spacing: 6) {
-                                        HStack {
-                                            Text(item.date)
-                                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                        HStack(spacing: 8) {
+                                            Text(item.storeName)
+                                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                                .foregroundColor(.appTextPrimary)
                                             StatusPill(text: item.status, color: item.statusColor)
                                         }
-                                        Text(item.time)
+                                        Text("\(item.date) · \(item.time)")
                                             .font(.system(size: 12, weight: .medium, design: .rounded))
                                             .foregroundColor(.appTextSecondary)
                                     }
@@ -139,18 +145,54 @@ struct MyHistoryView: View {
             .padding(.vertical, 12)
         }
         .background(Color.appBackground.ignoresSafeArea())
+        .refreshable {
+            await refreshFromUser()
+        }
+        .refreshStatusOverlay(isVisible: isUserRefreshing)
         .task {
             await loadData()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didAcceptInvite)) { _ in
+            Task { await loadData(force: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .payrollSettingsDidChange)) { _ in
+            Task { await loadData(force: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
+            Task { await loadData() }
         }
     }
 
     @MainActor
-    private func loadData() async {
+    private func refreshFromUser() async {
+        isUserRefreshing = true
+        defer { isUserRefreshing = false }
+        await loadData(force: true)
+    }
+
+    @MainActor
+    private func loadData(force: Bool = false) async {
         #if canImport(Supabase)
+        let now = Date()
+        if !force,
+           let lastLoadedAt,
+           now.timeIntervalSince(lastLoadedAt) < cacheTTLSeconds {
+            return
+        }
         isLoading = true
         defer { isLoading = false }
         do {
             let userId = try await SupabaseManager.shared.currentUserId()
+            do {
+                try await WorkerAutoRetirement.processForUser(userId: userId)
+            } catch {
+                if AppErrorMessage.isCancellation(error) {
+                    return
+                }
+                #if DEBUG
+                print("DEBUG: auto retirement (worker history) failed: \(error.localizedDescription)")
+                #endif
+            }
             let workers: [WorkerRow]
             do {
                 workers = try await SupabaseManager.shared
@@ -183,6 +225,7 @@ struct MyHistoryView: View {
                 monthWorkedText = "0시간"
                 monthPayText = "0원"
                 monthNetPayText = "0원"
+                lastLoadedAt = now
                 return
             }
 
@@ -213,7 +256,10 @@ struct MyHistoryView: View {
             var totalPay: Double = 0
             var rendered: [WorkItem] = []
 
-            let countedLogs = logs.filter { $0.status != "rejected" }
+            let countedLogs = logs.filter { log in
+                let hasCheckout = !(log.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+                return normalizedStatus(log.status) == "approved" && hasCheckout
+            }
 
             // Summary totals should include the entire month (not only the first page).
             for log in countedLogs {
@@ -263,16 +309,21 @@ struct MyHistoryView: View {
 
                 let worker = workerById[log.worker_id]
                 let wage = worker?.hourly_wage ?? 0
+                let storeName = worker?.stores?.name ?? "매장"
                 let pay = Double(minutes) / 60.0 * wage
 
                 let start = timeFormatter.string(from: checkIn)
                 let end = checkOut.map { timeFormatter.string(from: $0) } ?? "--:--"
-                let statusColor: Color = log.status == "approved" ? .appPositive : (log.status == "rejected" ? .appWarning : .appTextSecondary)
-                let statusLabel: String = log.status == "approved" ? "승인" : (log.status == "rejected" ? "반려" : "대기")
+                let status = normalizedStatus(log.status)
+                let statusColor: Color = status == "approved" ? .appPositive : (status == "rejected" ? .appWarning : .appTextSecondary)
+                let statusLabel: String = status == "approved" ? "승인" : (status == "rejected" ? "반려" : "대기")
 
                 rendered.append(
                     WorkItem(
+                        id: log.id,
+                        startedAt: checkIn,
                         date: dateFormatter.string(from: checkIn),
+                        storeName: storeName,
                         time: "\(start) - \(end)",
                         hours: Self.formatHours(minutes),
                         pay: Self.formatWon(pay),
@@ -285,15 +336,19 @@ struct MyHistoryView: View {
             monthWorkedText = Self.formatHours(totalMinutes)
             monthPayText = Self.formatWon(totalPay)
             monthNetPayText = Self.formatWon(netTotal)
-            items = rendered
+            items = rendered.sorted(by: { $0.startedAt > $1.startedAt })
+            lastLoadedAt = now
         } catch {
-            loadError = error.localizedDescription
+            if AppErrorMessage.isCancellation(error) {
+                return
+            }
+            loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
 
     private static func calcMinutes(checkIn: Date, checkOut: Date?) -> Int {
-        let end = checkOut ?? Date()
+        guard let end = checkOut else { return 0 }
         let minutes = floor(end.timeIntervalSince(checkIn) / 60.0)
         return max(0, Int(minutes))
     }
@@ -309,5 +364,10 @@ struct MyHistoryView: View {
         let h = minutes / 60
         let m = minutes % 60
         return "\(h)시간 \(m)분"
+    }
+
+    private func normalizedStatus(_ status: String?) -> String {
+        let value = status?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? "pending" : value
     }
 }

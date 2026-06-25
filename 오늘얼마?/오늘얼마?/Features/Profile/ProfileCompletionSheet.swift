@@ -68,7 +68,7 @@ struct ProfileCompletionSheet: View {
 
                 VStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(context.requiresName ? "표시 이름" : "표시 이름 (선택)")
+                        Text("표시 이름")
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
                             .foregroundColor(.appTextSecondary)
                         TextField("예: 홍길동", text: $name)
@@ -85,7 +85,7 @@ struct ProfileCompletionSheet: View {
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("전화번호 (선택)")
+                        Text("전화번호")
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
                             .foregroundColor(.appTextSecondary)
                         TextField("010-1234-5678", text: $phone)
@@ -143,14 +143,20 @@ struct ProfileCompletionSheet: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("닫기") { dismiss() }
-                    .disabled(isSaving)
+                if canDismissManually {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("닫기") { dismiss() }
+                            .disabled(isSaving)
+                    }
                 }
             }
         }
-        .interactiveDismissDisabled(isSaving)
+        .interactiveDismissDisabled(isSaving || !canDismissManually)
         .background(Color.appBackground.ignoresSafeArea())
+    }
+
+    private var canDismissManually: Bool {
+        !(context.requiresName && !context.showsSkip)
     }
 
     @MainActor

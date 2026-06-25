@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "2AF412422F31180E0011864D"
-               BuildableName = "&#x1109;&#x116e;&#x1103;&#x1161;&#x11bc;&#x1109;&#x116e;&#x1103;&#x1161;&#x11bc;.app"
+               BuildableName = "HowMuchToday.app"
                BlueprintName = "&#x110b;&#x1169;&#x1102;&#x1173;&#x11af;&#x110b;&#x1165;&#x11af;&#x1106;&#x1161;"
                ReferencedContainer = "container:&#x110b;&#x1169;&#x1102;&#x1173;&#x11af;&#x110b;&#x1165;&#x11af;&#x1106;&#x1161;?.xcodeproj">
             </BuildableReference>
@@ -69,7 +69,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "2AF412422F31180E0011864D"
-            BuildableName = "&#x1109;&#x116e;&#x1103;&#x1161;&#x11bc;&#x1109;&#x116e;&#x1103;&#x1161;&#x11bc;.app"
+            BuildableName = "HowMuchToday.app"
             BlueprintName = "&#x110b;&#x1169;&#x1102;&#x1173;&#x11af;&#x110b;&#x1165;&#x11af;&#x1106;&#x1161;"
             ReferencedContainer = "container:&#x110b;&#x1169;&#x1102;&#x1173;&#x11af;&#x110b;&#x1165;&#x11af;&#x1106;&#x1161;?.xcodeproj">
          </BuildableReference>
@@ -86,7 +86,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "2AF412422F31180E0011864D"
-            BuildableName = "&#x1109;&#x116e;&#x1103;&#x1161;&#x11bc;&#x1109;&#x116e;&#x1103;&#x1161;&#x11bc;.app"
+            BuildableName = "HowMuchToday.app"
             BlueprintName = "&#x110b;&#x1169;&#x1102;&#x1173;&#x11af;&#x110b;&#x1165;&#x11af;&#x1106;&#x1161;"
             ReferencedContainer = "container:&#x110b;&#x1169;&#x1102;&#x1173;&#x11af;&#x110b;&#x1165;&#x11af;&#x1106;&#x1161;?.xcodeproj">
          </BuildableReference>

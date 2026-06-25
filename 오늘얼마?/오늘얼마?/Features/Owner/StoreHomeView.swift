@@ -13,6 +13,8 @@ struct StoreHomeView: View {
     @State private var isPresentingInviteSheet = false
     @State private var isLoadingStores = false
     @State private var isLoadingSummary = false
+    @State private var isUserRefreshing = false
+    @State private var didLoadSummary = false
     @State private var storeError: String?
     @State private var pendingDeleteStore: Store?
     @State private var isShowingDeleteConfirm = false
@@ -27,7 +29,7 @@ struct StoreHomeView: View {
     @State private var lastStoresLoadedAt: Date?
     @State private var lastSummaryLoadedAt: Date?
     @State private var lastSummaryStoreId: UUID?
-    private let cacheTTLSeconds: TimeInterval = 45
+    private let cacheTTLSeconds: TimeInterval = 120
     
     var body: some View {
         ScrollView {
@@ -72,7 +74,7 @@ struct StoreHomeView: View {
                         SectionHeader(title: "내 매장")
                             .padding(.horizontal, 20)
 
-                        if isLoadingStores {
+                        if isLoadingStores && stores.isEmpty {
                             ProgressView()
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .appCard()
@@ -94,8 +96,14 @@ struct StoreHomeView: View {
                                 ForEach(stores) { store in
                                     let isSelected = store.id == selectedStoreId
                                     Button(action: {
+                                        if selectedStoreId != store.id {
+                                            todayMinutes = 0
+                                            todayPay = 0
+                                            workingNow = []
+                                            didLoadSummary = false
+                                        }
                                         selectedStoreId = store.id
-                                        Task { await loadSummary(force: false) }
+                                        Task { await loadSummary(force: true) }
                                     }) {
                                         HStack {
                                             VStack(alignment: .leading, spacing: 4) {
@@ -159,7 +167,7 @@ struct StoreHomeView: View {
                             StatusPill(text: "실시간", color: .appPositive)
                         }
                         
-                        if isLoadingSummary {
+                        if isLoadingSummary && !didLoadSummary {
                             ProgressView()
                                 .frame(maxWidth: .infinity, alignment: .center)
                         } else {
@@ -297,8 +305,9 @@ struct StoreHomeView: View {
             }
         }
         .refreshable {
-            await refresh(force: true)
+            await refreshFromUser()
         }
+        .refreshStatusOverlay(isVisible: isUserRefreshing)
         .background(Color.appBackground.ignoresSafeArea())
         .sheet(isPresented: $isPresentingCreateStore) {
             CreateStoreView { name, address in
@@ -346,6 +355,9 @@ struct StoreHomeView: View {
         .task {
             await refresh(force: false)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
+            Task { await refresh(force: false) }
+        }
     }
 
     private var selectedStoreName: String {
@@ -359,9 +371,16 @@ struct StoreHomeView: View {
             await SupabaseManager.shared.signOut()
             NotificationCenter.default.post(name: .didLogout, object: nil)
         } catch {
-            deleteAccountErrorMessage = error.localizedDescription
+            deleteAccountErrorMessage = AppErrorMessage.userMessage(error)
             isShowingDeleteAccountError = true
         }
+    }
+
+    @MainActor
+    private func refreshFromUser() async {
+        isUserRefreshing = true
+        defer { isUserRefreshing = false }
+        await refresh(force: true)
     }
 
     @MainActor
@@ -376,10 +395,12 @@ struct StoreHomeView: View {
         isLoadingStores = true
         defer { isLoadingStores = false }
         do {
+            let ownerId = try await SupabaseManager.shared.currentUserId()
             let result: [Store] = try await SupabaseManager.shared
                 .client
                 .from("stores")
                 .select()
+                .eq("owner_id", value: ownerId.uuidString)
                 .execute()
                 .value
             stores = result
@@ -388,17 +409,19 @@ struct StoreHomeView: View {
             }
             self.lastStoresLoadedAt = now
         } catch {
-            if error is CancellationError || (error as? URLError)?.code == .cancelled {
+            if AppErrorMessage.isCancellation(error) {
                 return
             }
-            storeError = error.localizedDescription
+            storeError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
 
     struct LogRow: Decodable {
+        let worker_id: UUID
         let check_in_at: String
         let check_out_at: String?
+        let status: String?
         let workers: WorkerInfo?
     }
 
@@ -429,7 +452,7 @@ struct StoreHomeView: View {
             let rows: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("check_in_at,check_out_at,workers(name,hourly_wage)")
+                .select("worker_id,check_in_at,check_out_at,status,workers(name,hourly_wage)")
                 .eq("store_id", value: storeId.uuidString)
                 .gte("check_in_at", value: iso.string(from: start))
                 .lt("check_in_at", value: iso.string(from: end))
@@ -438,39 +461,58 @@ struct StoreHomeView: View {
 
             var minutes = 0
             var pay: Double = 0
-            var workingNames: [String] = []
+            var latestRowByWorker: [UUID: (checkIn: Date, isOpen: Bool, name: String)] = [:]
             let dateParser = ISO8601DateFormatter()
             dateParser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
             for row in rows {
+                let status = row.status ?? "pending"
+                if status == "rejected" { continue }
+
                 let checkIn = dateParser.date(from: row.check_in_at) ?? iso.date(from: row.check_in_at) ?? Date()
-                let checkOut = row.check_out_at.flatMap { dateParser.date(from: $0) ?? iso.date(from: $0) }
-                let durationMinutes = calcMinutes(checkIn: checkIn, checkOut: checkOut)
+                let hasCheckoutValue = !(row.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+                let parsedCheckout = row.check_out_at.flatMap { dateParser.date(from: $0) ?? iso.date(from: $0) }
+
+                if let name = row.workers?.name {
+                    if let prev = latestRowByWorker[row.worker_id] {
+                        if checkIn > prev.checkIn {
+                            latestRowByWorker[row.worker_id] = (checkIn: checkIn, isOpen: !hasCheckoutValue, name: name)
+                        }
+                    } else {
+                        latestRowByWorker[row.worker_id] = (checkIn: checkIn, isOpen: !hasCheckoutValue, name: name)
+                    }
+                }
+
+                guard status == "approved", hasCheckoutValue else { continue }
+                // If checkout exists but parser fails, keep totals stable with zero-length fallback.
+                let effectiveCheckOut: Date? = parsedCheckout ?? checkIn
+                let durationMinutes = calcMinutes(checkIn: checkIn, checkOut: effectiveCheckOut)
                 minutes += durationMinutes
                 let wage = row.workers?.hourly_wage ?? 0
                 pay += Double(durationMinutes) / 60.0 * wage
-
-                if checkOut == nil, let name = row.workers?.name {
-                    workingNames.append(name)
-                }
             }
+            let workingNames = latestRowByWorker.values
+                .filter { $0.isOpen }
+                .map { $0.name }
+                .sorted()
 
             todayMinutes = minutes
             todayPay = pay
             workingNow = workingNames
+            didLoadSummary = true
             self.lastSummaryLoadedAt = now
             self.lastSummaryStoreId = storeId
         } catch {
-            if error is CancellationError || (error as? URLError)?.code == .cancelled {
+            if AppErrorMessage.isCancellation(error) {
                 return
             }
-            storeError = error.localizedDescription
+            storeError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
 
     private func calcMinutes(checkIn: Date, checkOut: Date?) -> Int {
-        let end = checkOut ?? Date()
+        guard let end = checkOut else { return 0 }
         let minutes = floor(end.timeIntervalSince(checkIn) / 60.0)
         return max(0, Int(minutes))
     }
@@ -524,7 +566,7 @@ struct StoreHomeView: View {
             lastStoresLoadedAt = Date()
             await loadSummary(force: true)
         } catch {
-            storeError = error.localizedDescription
+            storeError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
@@ -553,7 +595,7 @@ struct StoreHomeView: View {
                 .insert(payload)
                 .execute()
         } catch {
-            storeError = error.localizedDescription
+            storeError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
@@ -575,7 +617,7 @@ struct StoreHomeView: View {
             lastStoresLoadedAt = Date()
             await loadSummary(force: true)
         } catch {
-            storeError = error.localizedDescription
+            storeError = AppErrorMessage.userMessage(error)
         }
         #endif
         pendingDeleteStore = nil
@@ -650,6 +692,7 @@ struct CreateStoreView: View {
                                 .autocorrectionDisabled()
                                 .submitLabel(.search)
                                 .onSubmit { Task { await searchPlaces() } }
+                                .foregroundColor(.appTextPrimary)
                                 .padding(12)
                                 .background(Color.appSurface)
                                 .cornerRadius(12)
@@ -670,6 +713,7 @@ struct CreateStoreView: View {
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
                             .foregroundColor(.appTextSecondary)
                         TextField("서울 강남구 ...", text: $address)
+                            .foregroundColor(.appTextPrimary)
                             .padding(12)
                             .background(Color.appSurface)
                             .cornerRadius(12)
@@ -728,7 +772,7 @@ struct CreateStoreView: View {
             searchResults = results
             isSearchExpanded = true
         } catch {
-            searchError = error.localizedDescription
+            searchError = AppErrorMessage.userMessage(error)
         }
     }
 
@@ -804,7 +848,7 @@ struct CreateWorkerView: View {
 
     @State private var name: String = ""
     @State private var phone: String = ""
-    @State private var wage: String = ""
+    @State private var wage: String = String(Int(AppConfig.defaultHourlyWage))
 
     var body: some View {
         NavigationStack {
@@ -842,7 +886,7 @@ struct CreateWorkerView: View {
                     Text("시급 (원)")
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundColor(.appTextSecondary)
-                    TextField("예: 10000", text: $wage)
+                    TextField("예: 10320", text: $wage)
                         .keyboardType(.numberPad)
                         .padding(12)
                         .background(Color.appSurface)
@@ -855,7 +899,7 @@ struct CreateWorkerView: View {
 
                 Button(action: {
                     let digits = wage.filter { $0.isNumber }
-                    let amount = Double(digits) ?? 0
+                    let amount = Double(digits) ?? AppConfig.defaultHourlyWage
                     onSubmit(name, phone, amount)
                     dismiss()
                 }) {

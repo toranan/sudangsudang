@@ -19,7 +19,7 @@ struct OwnerMonthlyDetailView: View {
         let worker_id: UUID
         let check_in_at: String
         let check_out_at: String?
-        let status: String
+        let status: String?
     }
 
     struct Totals {
@@ -73,6 +73,9 @@ struct OwnerMonthlyDetailView: View {
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("상세")
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await loadAll()
+        }
         .task {
             await loadAll()
         }
@@ -143,7 +146,10 @@ struct OwnerMonthlyDetailView: View {
 
             totalsByWorker = buildTotals(workers: rows, logs: logs)
         } catch {
-            loadError = error.localizedDescription
+            if AppErrorMessage.isCancellation(error) {
+                return
+            }
+            loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
@@ -157,8 +163,12 @@ struct OwnerMonthlyDetailView: View {
 
         var minutesByWorker: [UUID: Int] = [:]
         for log in logs {
-            let start = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
-            let end = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) } ?? Date()
+            guard normalizedStatus(log.status) == "approved" else { continue }
+            let hasCheckout = !(log.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            guard hasCheckout else { continue }
+
+            guard let start = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) else { continue }
+            guard let end = log.check_out_at.flatMap({ parser.date(from: $0) ?? iso.date(from: $0) }) else { continue }
             let minutes = calcMinutes(checkIn: start, checkOut: end)
             minutesByWorker[log.worker_id, default: 0] += minutes
         }
@@ -195,5 +205,10 @@ struct OwnerMonthlyDetailView: View {
         let h = minutes / 60
         let m = minutes % 60
         return "\(h)시간 \(m)분"
+    }
+
+    private func normalizedStatus(_ status: String?) -> String {
+        let value = status?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? "pending" : value
     }
 }

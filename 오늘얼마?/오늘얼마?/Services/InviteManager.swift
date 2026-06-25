@@ -6,6 +6,7 @@ import Supabase
 extension Notification.Name {
     static let didReceiveInvite = Notification.Name("didReceiveInvite")
     static let didAcceptInvite = Notification.Name("didAcceptInvite")
+    static let didOpenWorkerCheckIn = Notification.Name("didOpenWorkerCheckIn")
 }
 
 final class InviteManager {
@@ -81,7 +82,51 @@ final class InviteManager {
 
     private static func extractToken(from url: URL) -> String? {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        let host = (components.host ?? "").lowercased()
+        let path = components.path.lowercased()
+        let isInviteRoute = (host == "invite") || path.contains("/invite")
+        guard isInviteRoute else { return nil }
         let token = components.queryItems?.first(where: { $0.name == "token" })?.value
         return token?.isEmpty == false ? token : nil
+    }
+}
+
+final class WorkerDeepLinkManager {
+    static let shared = WorkerDeepLinkManager()
+    private let pendingStoreIdKey = "pending_worker_checkin_store_id"
+
+    private init() {}
+
+    func handleIncomingURL(_ url: URL) {
+        guard let storeId = Self.extractWorkerCheckInStoreId(from: url) else { return }
+        UserDefaults.standard.set(storeId.uuidString, forKey: pendingStoreIdKey)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .didOpenWorkerCheckIn, object: storeId)
+        }
+    }
+
+    func pendingStoreId() -> UUID? {
+        guard let raw = UserDefaults.standard.string(forKey: pendingStoreIdKey) else { return nil }
+        return UUID(uuidString: raw)
+    }
+
+    func clearPendingStoreId() {
+        UserDefaults.standard.removeObject(forKey: pendingStoreIdKey)
+    }
+
+    private static func extractWorkerCheckInStoreId(from url: URL) -> UUID? {
+        guard url.scheme?.lowercased() == "howmuch" else { return nil }
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        let host = (components.host ?? "").lowercased()
+        let path = components.path.lowercased()
+        let isWorkerCheckInRoute = (host == "worker" && path == "/checkin") || path.contains("/worker/checkin")
+        guard isWorkerCheckInRoute else { return nil }
+
+        let rawStoreId = components.queryItems?.first(where: {
+            let key = $0.name.lowercased()
+            return key == "store_id" || key == "storeid"
+        })?.value
+        guard let rawStoreId else { return nil }
+        return UUID(uuidString: rawStoreId)
     }
 }

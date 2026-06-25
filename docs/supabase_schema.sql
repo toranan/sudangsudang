@@ -52,6 +52,8 @@ CREATE TABLE public.workers (
     hourly_wage NUMERIC DEFAULT 0,
     apply_weekly_allowance BOOLEAN DEFAULT FALSE,
     deduction_type TEXT CHECK (deduction_type IN ('withholding_3_3', 'four_insurance')) DEFAULT 'withholding_3_3',
+    apply_night_allowance BOOLEAN DEFAULT FALSE,
+    payday SMALLINT CHECK (payday BETWEEN 1 AND 31) DEFAULT 10,
     is_active BOOLEAN DEFAULT TRUE,
     joined_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -120,6 +122,16 @@ CREATE TABLE public.work_logs (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Keep temporal integrity for attendance records.
+ALTER TABLE public.work_logs
+ADD CONSTRAINT work_logs_checkout_after_checkin
+CHECK (check_out_at IS NULL OR check_out_at >= check_in_at);
+
+-- Allow multiple shifts per day, but prevent multiple concurrent open shifts.
+CREATE UNIQUE INDEX work_logs_one_open_shift_per_worker_store
+ON public.work_logs (store_id, worker_id)
+WHERE check_out_at IS NULL;
 
 -- Enable RLS for work_logs
 ALTER TABLE public.work_logs ENABLE ROW LEVEL SECURITY;
