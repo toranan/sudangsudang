@@ -11,6 +11,7 @@ struct StoreHomeView: View {
     @State private var isPresentingCreateStore = false
     @State private var isPresentingCreateWorker = false
     @State private var isPresentingInviteSheet = false
+    @State private var isStoreDropdownExpanded = false
     @State private var isLoadingStores = false
     @State private var isLoadingSummary = false
     @State private var isUserRefreshing = false
@@ -92,61 +93,7 @@ struct StoreHomeView: View {
                             .appCard()
                             .padding(.horizontal, 20)
                         } else {
-                            VStack(spacing: 10) {
-                                ForEach(stores) { store in
-                                    let isSelected = store.id == selectedStoreId
-                                    Button(action: {
-                                        if selectedStoreId != store.id {
-                                            todayMinutes = 0
-                                            todayPay = 0
-                                            workingNow = []
-                                            didLoadSummary = false
-                                        }
-                                        selectedStoreId = store.id
-                                        Task { await loadSummary(force: true) }
-                                    }) {
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text(store.name)
-                                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                                    .foregroundColor(.appTextPrimary)
-                                                if let address = store.address, !address.isEmpty {
-                                                    Text(address)
-                                                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                                                        .foregroundColor(.appTextSecondary)
-                                                }
-                                            }
-                                            Spacer()
-                                            Menu {
-                                                Button(role: .destructive) {
-                                                    pendingDeleteStore = store
-                                                    isShowingDeleteConfirm = true
-                                                } label: {
-                                                    Label("삭제", systemImage: "trash")
-                                                }
-                                            } label: {
-                                                Image(systemName: "ellipsis")
-                                                    .foregroundColor(.appTextSecondary)
-                                                    .padding(6)
-                                            }
-                                        }
-                                        .padding(12)
-                                        .background(Color.appSurface)
-                                        .cornerRadius(14)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 14)
-                                                .stroke(isSelected ? Color.appAccent.opacity(0.4) : Color.appLine, lineWidth: 1)
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-
-                                Button(action: { isPresentingCreateStore = true }) {
-                                    Text("매장 추가하기")
-                                }
-                                .buttonStyle(SecondaryButtonStyle())
-                            }
-                            .padding(.horizontal, 20)
+                            storeDropdown
                         }
 
                         if let storeError {
@@ -164,7 +111,6 @@ struct StoreHomeView: View {
                                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                                 .foregroundColor(.appTextSecondary)
                             Spacer()
-                            StatusPill(text: "실시간", color: .appPositive)
                         }
                         
                         if isLoadingSummary && !didLoadSummary {
@@ -274,25 +220,29 @@ struct StoreHomeView: View {
                         
                         // Additional List Actions
                         VStack(spacing: 0) {
-                            HStack {
-                                Image(systemName: "person.crop.circle.badge.plus")
-                                    .foregroundColor(.appTextSecondary)
-                                    .frame(width: 24)
-                                Text("알바생 등록하기")
-                                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    .foregroundColor(.appTextPrimary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 12, height: 12)
-                                    .foregroundColor(.appLine)
-                            }
-                            .padding(16)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                guard selectedStoreId != nil else { return }
-                                isPresentingCreateWorker = true
+                            quickMenuRow(icon: "person.crop.circle.badge.plus", title: "알바생 등록하기")
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    guard selectedStoreId != nil else { return }
+                                    isPresentingCreateWorker = true
+                                }
+
+                            Divider()
+                                .padding(.leading, 56)
+
+                            if let selectedStore {
+                                NavigationLink {
+                                    StoreKnowledgeManagementView(
+                                        storeId: selectedStore.id,
+                                        storeName: selectedStore.name
+                                    )
+                                } label: {
+                                    quickMenuRow(icon: "book.closed.fill", title: "가게 관리")
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                quickMenuRow(icon: "book.closed.fill", title: "가게 관리")
+                                    .opacity(0.45)
                             }
                         }
                         .background(Color.appSurface)
@@ -362,6 +312,152 @@ struct StoreHomeView: View {
 
     private var selectedStoreName: String {
         stores.first(where: { $0.id == selectedStoreId })?.name ?? "내 매장"
+    }
+
+    private var selectedStore: Store? {
+        stores.first(where: { $0.id == selectedStoreId }) ?? stores.first
+    }
+
+    private var selectableStores: [Store] {
+        guard let selectedStore else { return stores }
+        return stores.filter { $0.id != selectedStore.id }
+    }
+
+    private var storeDropdown: some View {
+        VStack(spacing: 10) {
+            if let selectedStore {
+                HStack(spacing: 10) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isStoreDropdownExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            storeInfo(selectedStore)
+                            Spacer()
+                            Image(systemName: isStoreDropdownExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.appTextSecondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    storeDeleteMenu(selectedStore)
+                }
+                .padding(14)
+                .background(Color.appSurface)
+                .cornerRadius(14)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.appAccent.opacity(0.35), lineWidth: 1)
+                )
+            }
+
+            if isStoreDropdownExpanded {
+                VStack(spacing: 8) {
+                    ForEach(selectableStores) { store in
+                        storeDropdownRow(store)
+                    }
+
+                    Button(action: { isPresentingCreateStore = true }) {
+                        Label("매장 추가하기", systemImage: "plus")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private func storeDropdownRow(_ store: Store) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                selectStore(store)
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    isStoreDropdownExpanded = false
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    storeInfo(store)
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            storeDeleteMenu(store)
+        }
+        .padding(12)
+        .background(Color.appSurface)
+        .cornerRadius(14)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.appLine, lineWidth: 1)
+        )
+    }
+
+    private func storeDeleteMenu(_ store: Store) -> some View {
+        Menu {
+            Button(role: .destructive) {
+                pendingDeleteStore = store
+                isShowingDeleteConfirm = true
+            } label: {
+                Label("삭제", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.appTextSecondary)
+                .frame(width: 34, height: 34)
+                .contentShape(Rectangle())
+        }
+    }
+
+    private func storeInfo(_ store: Store) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(store.name)
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundColor(.appTextPrimary)
+                .lineLimit(1)
+
+            if let address = store.address, !address.isEmpty {
+                Text(address)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundColor(.appTextSecondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private func quickMenuRow(icon: String, title: String) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(.appTextSecondary)
+                .frame(width: 24)
+            Text(title)
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundColor(.appTextPrimary)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 12, height: 12)
+                .foregroundColor(.appLine)
+        }
+        .padding(16)
+    }
+
+    private func selectStore(_ store: Store) {
+        if selectedStoreId != store.id {
+            todayMinutes = 0
+            todayPay = 0
+            workingNow = []
+            didLoadSummary = false
+        }
+        selectedStoreId = store.id
+        Task { await loadSummary(force: true) }
     }
 
     @MainActor

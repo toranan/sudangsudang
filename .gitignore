@@ -1,3 +1,14 @@
 .DS_Store
 Config/Secrets.xcconfig
+Config/.env
 오늘얼마?/Config/Secrets.xcconfig
+
+# Xcode local user state
+*.xcuserstate
+xcuserdata/
+DerivedData/
+
+# Local backups and generated assets not intended for source control
+*.bak
+photo/
+*/photo/
