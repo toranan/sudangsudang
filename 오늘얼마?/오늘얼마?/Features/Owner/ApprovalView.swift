@@ -287,7 +287,7 @@ struct ApprovalView: View {
                 let approved_by: UUID
                 let approved_at: String
             }
-            let iso = ISO8601DateFormatter()
+            let iso = AppTime.iso
             let payload = UpdatePayload(
                 status: status,
                 approved_by: ownerId,
@@ -299,8 +299,10 @@ struct ApprovalView: View {
                 .update(payload)
                 .eq("id", value: item.id.uuidString)
                 .execute()
+            Haptics.success()
             await loadLogs(force: true)
         } catch {
+            Haptics.error()
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -310,10 +312,6 @@ struct ApprovalView: View {
         !(item.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
     }
 
-    private func normalizedStatus(_ status: String?) -> String {
-        let value = status?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return value.isEmpty ? "pending" : value
-    }
 
     private func workerDisplayName(_ item: LogRow) -> String {
         let trimmed = item.workers?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -321,13 +319,11 @@ struct ApprovalView: View {
     }
 
     private func formatRange(_ item: LogRow) -> String {
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso = ISO8601DateFormatter()
+        let parser = AppTime.isoWithFractionalSeconds
+        let iso = AppTime.iso
         let start = parser.date(from: item.check_in_at) ?? iso.date(from: item.check_in_at) ?? Date()
         let end = item.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "M월 d일 HH:mm"
+        let formatter = AppTime.displayFormatter("M월 d일 HH:mm")
         let startText = formatter.string(from: start)
         let endText = end.map { formatter.string(from: $0) } ?? "--:--"
         return "\(startText) - \(endText)"
@@ -339,18 +335,12 @@ struct ApprovalView: View {
     }
 
     private func calcMinutes(checkIn: String, checkOut: String?) -> Int {
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso = ISO8601DateFormatter()
+        let parser = AppTime.isoWithFractionalSeconds
+        let iso = AppTime.iso
         let start = parser.date(from: checkIn) ?? iso.date(from: checkIn) ?? Date()
         let end = checkOut.flatMap { parser.date(from: $0) ?? iso.date(from: $0) } ?? Date()
         let minutes = floor(end.timeIntervalSince(start) / 60.0)
         return max(0, Int(minutes))
     }
 
-    private func formatHours(_ minutes: Int) -> String {
-        let h = minutes / 60
-        let m = minutes % 60
-        return "\(h)시간 \(m)분"
-    }
 }

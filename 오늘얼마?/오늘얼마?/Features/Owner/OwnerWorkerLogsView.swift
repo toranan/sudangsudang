@@ -19,8 +19,8 @@ struct OwnerWorkerLogsView: View {
     @State private var isLoading = false
     @State private var loadError: String?
 
-    private let calendar = Calendar.current
-    private let isoFormatter = ISO8601DateFormatter()
+    private let calendar = AppTime.calendar
+    private let isoFormatter = AppTime.iso
 
     var body: some View {
         ScrollView {
@@ -122,40 +122,21 @@ struct OwnerWorkerLogsView: View {
     }
 
     private func computeMinutesAndRange(_ log: LogRow) -> (Int, String) {
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso = ISO8601DateFormatter()
+        let parser = AppTime.isoWithFractionalSeconds
+        let iso = AppTime.iso
 
         let start = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
         let isOpen = log.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
         let parsedEnd = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
         let minutes = (isOpen || parsedEnd == nil) ? 0 : max(0, Int(floor((parsedEnd?.timeIntervalSince(start) ?? 0) / 60.0)))
 
-        let df = DateFormatter()
-        df.dateFormat = "M월 d일 HH:mm"
+        let df = AppTime.displayFormatter("M월 d일 HH:mm")
         let startText = df.string(from: start)
         let endText = (isOpen || parsedEnd == nil) ? "진행 중" : df.string(from: parsedEnd ?? start)
         return (minutes, "\(startText) - \(endText)")
     }
 
-    private func normalizedStatus(_ status: String?) -> String {
-        let value = status?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return value.isEmpty ? "pending" : value
-    }
 
-    private func statusLabel(_ status: String?) -> String {
-        let value = normalizedStatus(status)
-        return value == "approved" ? "승인" : (value == "rejected" ? "반려" : "대기")
-    }
 
-    private func statusColor(_ status: String?) -> Color {
-        let value = normalizedStatus(status)
-        return value == "approved" ? .appPositive : (value == "rejected" ? .appWarning : .appTextSecondary)
-    }
 
-    private func formatHours(_ minutes: Int) -> String {
-        let h = minutes / 60
-        let m = minutes % 60
-        return "\(h)시간 \(m)분"
-    }
 }

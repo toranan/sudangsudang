@@ -832,9 +832,7 @@ struct StoreKnowledgeManagementView: View {
 
     private func formattedDate(_ date: Date?) -> String? {
         guard let date else { return nil }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "M월 d일 HH:mm"
+        let formatter = AppTime.displayFormatter("M월 d일 HH:mm")
         return formatter.string(from: date)
     }
 }

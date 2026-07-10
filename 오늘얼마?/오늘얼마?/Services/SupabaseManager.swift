@@ -452,7 +452,7 @@ final class SupabaseManager {
     }
 
     func createInvite(storeId: UUID, expiresAt: Date) async throws -> Invite {
-        let formatter = ISO8601DateFormatter()
+        let formatter = AppTime.iso
         let expiresAtISO = formatter.string(from: expiresAt)
 
         // 6자리 코드는 충돌 가능성이 있으므로, 유니크 충돌 시 몇 번 재시도한다.

@@ -161,9 +161,9 @@ enum WorkerAutoRetirement {
         guard !activeWorkers.isEmpty else { return }
 
         let now = Date()
-        let calendar = Calendar.current
+        let calendar = AppTime.calendar
         let cutoff = calendar.date(byAdding: .day, value: -14, to: now) ?? now
-        let cutoffISO = ISO8601DateFormatter().string(from: cutoff)
+        let cutoffISO = AppTime.iso.string(from: cutoff)
         let workerIdStrings = activeWorkers.map { $0.id.uuidString }
 
         let recentRows: [RecentCheckInRow] = try await SupabaseManager.shared
@@ -202,9 +202,8 @@ enum WorkerAutoRetirement {
 
     private static func parseISODate(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
-        let parserWithFractional = ISO8601DateFormatter()
-        parserWithFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let parser = ISO8601DateFormatter()
+        let parserWithFractional = AppTime.isoWithFractionalSeconds
+        let parser = AppTime.iso
         return parserWithFractional.date(from: raw) ?? parser.date(from: raw)
     }
 

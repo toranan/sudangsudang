@@ -229,10 +229,10 @@ struct MyHistoryView: View {
                 return
             }
 
-            let calendar = Calendar.current
+            let calendar = AppTime.calendar
             let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
             let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? Date()
-            let iso = ISO8601DateFormatter()
+            let iso = AppTime.iso
 
             let logs: [LogRow] = try await SupabaseManager.shared
                 .client
@@ -245,12 +245,9 @@ struct MyHistoryView: View {
                 .execute()
                 .value
 
-            let parser = ISO8601DateFormatter()
-            parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let timeFormatter = DateFormatter()
-            timeFormatter.dateFormat = "HH:mm"
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "M월 d일"
+            let parser = AppTime.isoWithFractionalSeconds
+            let timeFormatter = AppTime.displayFormatter("HH:mm")
+            let dateFormatter = AppTime.displayFormatter("M월 d일")
 
             var totalMinutes = 0
             var totalPay: Double = 0
@@ -325,17 +322,17 @@ struct MyHistoryView: View {
                         date: dateFormatter.string(from: checkIn),
                         storeName: storeName,
                         time: "\(start) - \(end)",
-                        hours: Self.formatHours(minutes),
-                        pay: Self.formatWon(pay),
+                        hours: formatHours(minutes),
+                        pay: formatWon(pay),
                         status: statusLabel,
                         statusColor: statusColor
                     )
                 )
             }
 
-            monthWorkedText = Self.formatHours(totalMinutes)
-            monthPayText = Self.formatWon(totalPay)
-            monthNetPayText = Self.formatWon(netTotal)
+            monthWorkedText = formatHours(totalMinutes)
+            monthPayText = formatWon(totalPay)
+            monthNetPayText = formatWon(netTotal)
             items = rendered.sorted(by: { $0.startedAt > $1.startedAt })
             lastLoadedAt = now
         } catch {
@@ -353,21 +350,6 @@ struct MyHistoryView: View {
         return max(0, Int(minutes))
     }
 
-    private static func formatWon(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        let number = formatter.string(from: NSNumber(value: Int(value))) ?? "0"
-        return "\(number)원"
-    }
 
-    private static func formatHours(_ minutes: Int) -> String {
-        let h = minutes / 60
-        let m = minutes % 60
-        return "\(h)시간 \(m)분"
-    }
 
-    private func normalizedStatus(_ status: String?) -> String {
-        let value = status?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return value.isEmpty ? "pending" : value
-    }
 }

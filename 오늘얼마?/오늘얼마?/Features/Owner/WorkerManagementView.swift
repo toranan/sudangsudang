@@ -76,7 +76,7 @@ struct WorkerManagementView: View {
     @State private var isCreatingInvite = false
     @State private var inviteError: String?
     @State private var isPresentingCreateWorker = false
-    @State private var selectedMonth: Date = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: Date())) ?? Date()
+    @State private var selectedMonth: Date = AppTime.calendar.date(from: AppTime.calendar.dateComponents([.year, .month], from: Date())) ?? Date()
     @State private var lastStoresLoadedAt: Date?
     @State private var lastWorkersLoadedAt: Date?
     @State private var lastWorkersKey: String?
@@ -278,7 +278,7 @@ struct WorkerManagementView: View {
     private var monthSelector: some View {
         HStack(spacing: 12) {
             Button(action: {
-                selectedMonth = Calendar.current.date(byAdding: .month, value: -1, to: selectedMonth) ?? selectedMonth
+                selectedMonth = AppTime.calendar.date(byAdding: .month, value: -1, to: selectedMonth) ?? selectedMonth
             }) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 14, weight: .semibold))
@@ -290,7 +290,7 @@ struct WorkerManagementView: View {
                 .foregroundColor(.appTextPrimary)
             Spacer()
             Button(action: {
-                selectedMonth = Calendar.current.date(byAdding: .month, value: 1, to: selectedMonth) ?? selectedMonth
+                selectedMonth = AppTime.calendar.date(byAdding: .month, value: 1, to: selectedMonth) ?? selectedMonth
             }) {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
@@ -463,7 +463,7 @@ struct WorkerManagementView: View {
     }
 
     private func monthKey(_ date: Date) -> String {
-        let comps = Calendar.current.dateComponents([.year, .month], from: date)
+        let comps = AppTime.calendar.dateComponents([.year, .month], from: date)
         return "\(comps.year ?? 0)-\(comps.month ?? 0)"
     }
 
@@ -474,12 +474,6 @@ struct WorkerManagementView: View {
     }
     
     // Formatting helpers utilized by parent view
-    private func formatWon(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        let number = formatter.string(from: NSNumber(value: Int(value))) ?? "0"
-        return "\(number)원"
-    }
     
     private func formatWonRaw(_ value: Double) -> String {
         let formatter = NumberFormatter()
@@ -487,16 +481,9 @@ struct WorkerManagementView: View {
         return formatter.string(from: NSNumber(value: Int(value))) ?? ""
     }
 
-    private func formatHours(_ minutes: Int) -> String {
-        let h = minutes / 60
-        let m = minutes % 60
-        return "\(h)시간 \(m)분"
-    }
 
     private func monthTitle(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "yyyy년 M월"
+        let formatter = AppTime.displayFormatter("yyyy년 M월")
         return formatter.string(from: date)
     }
 
@@ -504,10 +491,10 @@ struct WorkerManagementView: View {
     private func loadMonthlyLogs(storeId: UUID, workers: [WorkerRow]) async {
         #if canImport(Supabase)
         do {
-            let calendar = Calendar.current
+            let calendar = AppTime.calendar
             let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth)) ?? Date()
             let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? Date()
-            let iso = ISO8601DateFormatter()
+            let iso = AppTime.iso
 
             let rows: [WorkLogRow] = try await SupabaseManager.shared
                 .client
@@ -712,9 +699,7 @@ struct WorkerManagementView: View {
                 values.reduce(0, +) / Double(max(values.count, 1))
             }
 
-            let dateOnlyFormatter = DateFormatter()
-            dateOnlyFormatter.locale = Locale(identifier: "en_US_POSIX")
-            dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
+            let dateOnlyFormatter = AppTime.displayFormatter("yyyy-MM-dd")
             let todayKey = dateOnlyFormatter.string(from: Date())
             let schedulesToEvaluate = schedules.filter { $0.work_date <= todayKey }
 
@@ -739,8 +724,8 @@ struct WorkerManagementView: View {
 
             let earliestDate = schedulesToEvaluate
                 .compactMap { dateOnlyFormatter.date(from: $0.work_date) }
-                .min() ?? Calendar.current.startOfDay(for: Date())
-            let iso = ISO8601DateFormatter()
+                .min() ?? AppTime.calendar.startOfDay(for: Date())
+            let iso = AppTime.iso
 
             let logs: [WorkLogEvalRow] = try await SupabaseManager.shared
                 .client
@@ -751,8 +736,7 @@ struct WorkerManagementView: View {
                 .execute()
                 .value
 
-            let parserWithFractional = ISO8601DateFormatter()
-            parserWithFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let parserWithFractional = AppTime.isoWithFractionalSeconds
 
             var earliestLogByWorkerDay: [UUID: [String: Date]] = [:]
             for log in logs {
@@ -915,14 +899,13 @@ struct WorkerManagementView: View {
         components.hour = hour
         components.minute = minute
         components.second = second
-        return Calendar.current.date(from: components)
+        return AppTime.calendar.date(from: components)
     }
 
     private func parseJoinedAt(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
-        let parserWithFractional = ISO8601DateFormatter()
-        parserWithFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let parser = ISO8601DateFormatter()
+        let parserWithFractional = AppTime.isoWithFractionalSeconds
+        let parser = AppTime.iso
         return parserWithFractional.date(from: raw) ?? parser.date(from: raw)
     }
 
@@ -932,9 +915,8 @@ struct WorkerManagementView: View {
 
     // Helper calculation functions need to be available for parent logic too
     private func calcMinutes(checkIn: String, checkOut: String?) -> Int {
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso = ISO8601DateFormatter()
+        let parser = AppTime.isoWithFractionalSeconds
+        let iso = AppTime.iso
         let start = parser.date(from: checkIn) ?? iso.date(from: checkIn) ?? Date()
         let end = checkOut.flatMap { parser.date(from: $0) ?? iso.date(from: $0) } ?? Date()
         let minutes = floor(end.timeIntervalSince(start) / 60.0)
@@ -945,10 +927,6 @@ struct WorkerManagementView: View {
         Double(minutes) / 60.0 * wage
     }
 
-    private func normalizedStatus(_ status: String?) -> String {
-        let value = status?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return value.isEmpty ? "pending" : value
-    }
 
     @MainActor
     private func createInvite() async {
@@ -958,7 +936,7 @@ struct WorkerManagementView: View {
         inviteError = nil
         defer { isCreatingInvite = false }
         do {
-            let expiresAt = Calendar.current.date(byAdding: .hour, value: 48, to: Date()) ?? Date()
+            let expiresAt = AppTime.calendar.date(byAdding: .hour, value: 48, to: Date()) ?? Date()
             let invite = try await SupabaseManager.shared.createInvite(storeId: storeId, expiresAt: expiresAt)
             inviteCode = invite.token
             inviteLink = URL(string: "howmuch://invite?token=\(invite.token)")
@@ -1728,7 +1706,7 @@ struct WorkerDetailSheet: View {
                 let owner_id: UUID
                 let rating: Double
             }
-            let iso = ISO8601DateFormatter()
+            let iso = AppTime.iso
             let existing: [ExistingRow] = try await SupabaseManager.shared
                 .client
                 .from("worker_owner_ratings")
@@ -1899,7 +1877,7 @@ struct WorkerDetailSheet: View {
             return
         }
 
-        let calendar = Calendar.current
+        let calendar = AppTime.calendar
         let dayStart = calendar.startOfDay(for: Date())
         guard let checkIn = calendar.date(bySettingHour: startHour, minute: startMinute, second: 0, of: dayStart),
               let sameDayEnd = calendar.date(bySettingHour: endHour, minute: endMinute, second: 0, of: dayStart) else {
@@ -1930,7 +1908,7 @@ struct WorkerDetailSheet: View {
                 let approved_by: UUID
                 let approved_at: String
             }
-            let iso = ISO8601DateFormatter()
+            let iso = AppTime.iso
             let payload = InsertPayload(
                 store_id: worker.store_id,
                 worker_id: worker.id,
@@ -1971,9 +1949,8 @@ struct WorkerDetailSheet: View {
             return
         }
 
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso = ISO8601DateFormatter()
+        let parser = AppTime.isoWithFractionalSeconds
+        let iso = AppTime.iso
         let end = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) } ?? Date()
         var checkIn = end.addingTimeInterval(TimeInterval(-totalMinutes * 60))
 
@@ -2021,41 +1998,26 @@ struct WorkerDetailSheet: View {
     }
 
     // Duplicate helpers for self-contained View
-    private func formatWon(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        let number = formatter.string(from: NSNumber(value: Int(value))) ?? "0"
-        return "\(number)원"
-    }
 
     private func formatDate(_ isoString: String) -> String {
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso = ISO8601DateFormatter()
+        let parser = AppTime.isoWithFractionalSeconds
+        let iso = AppTime.iso
         let date = parser.date(from: isoString) ?? iso.date(from: isoString) ?? Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "M월 d일"
+        let formatter = AppTime.displayFormatter("M월 d일")
         return formatter.string(from: date)
     }
 
     private func formatTimeRange(_ log: WorkerManagementView.WorkLogRow) -> String {
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso = ISO8601DateFormatter()
+        let parser = AppTime.isoWithFractionalSeconds
+        let iso = AppTime.iso
         let start = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
         let end = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
+        let formatter = AppTime.displayFormatter("HH:mm")
         let startText = formatter.string(from: start)
         let endText = end.map { formatter.string(from: $0) } ?? "--:--"
         return "\(startText) - \(endText)"
     }
 
-    private func formatHours(_ val: Int) -> String {
-        let h = val / 60
-        let m = val % 60
-        return "\(h)시간 \(m)분"
-    }
 
     private func totalMinutes() -> Int {
         monthLogs.reduce(0) { partial, log in
@@ -2064,9 +2026,8 @@ struct WorkerDetailSheet: View {
     }
     
     private func calcMinutes(checkIn: String, checkOut: String?) -> Int {
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso = ISO8601DateFormatter()
+        let parser = AppTime.isoWithFractionalSeconds
+        let iso = AppTime.iso
         let start = parser.date(from: checkIn) ?? iso.date(from: checkIn) ?? Date()
         let end = checkOut.flatMap { parser.date(from: $0) ?? iso.date(from: $0) } ?? Date()
         // Floor to minute to avoid inflating time (e.g., 30 seconds shouldn't become +1 minute).
@@ -2099,9 +2060,8 @@ struct WorkerDetailSheet: View {
 
     private func parseJoinedAt(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
-        let parserWithFractional = ISO8601DateFormatter()
-        parserWithFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let parser = ISO8601DateFormatter()
+        let parserWithFractional = AppTime.isoWithFractionalSeconds
+        let parser = AppTime.iso
         return parserWithFractional.date(from: raw) ?? parser.date(from: raw)
     }
     

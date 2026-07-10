@@ -541,10 +541,10 @@ struct StoreHomeView: View {
         isLoadingSummary = true
         defer { isLoadingSummary = false }
         do {
-            let calendar = Calendar.current
+            let calendar = AppTime.calendar
             let start = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
             let end = calendar.date(byAdding: .month, value: 1, to: start) ?? Date()
-            let iso = ISO8601DateFormatter()
+            let iso = AppTime.iso
             let rows: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
@@ -558,8 +558,7 @@ struct StoreHomeView: View {
             var minutes = 0
             var pay: Double = 0
             var latestRowByWorker: [UUID: (checkIn: Date, isOpen: Bool, name: String)] = [:]
-            let dateParser = ISO8601DateFormatter()
-            dateParser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let dateParser = AppTime.isoWithFractionalSeconds
 
             for row in rows {
                 let status = row.status ?? "pending"
@@ -613,18 +612,7 @@ struct StoreHomeView: View {
         return max(0, Int(minutes))
     }
 
-    private func formatWon(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        let number = formatter.string(from: NSNumber(value: Int(value))) ?? "0"
-        return "\(number)원"
-    }
 
-    private func formatHours(_ minutes: Int) -> String {
-        let h = minutes / 60
-        let m = minutes % 60
-        return "\(h)시간 \(m)분"
-    }
 
     @MainActor
     private func refresh(force: Bool) async {

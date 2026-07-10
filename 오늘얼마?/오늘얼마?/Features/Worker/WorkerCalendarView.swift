@@ -54,8 +54,8 @@ struct WorkerCalendarView: View {
     @State private var lastMonthKey: String?
     private let cacheTTLSeconds: TimeInterval = 120
 
-    private let calendar = Calendar.current
-    private let isoFormatter = ISO8601DateFormatter()
+    private let calendar = AppTime.calendar
+    private let isoFormatter = AppTime.iso
 
     var body: some View {
         ScrollView {
@@ -270,22 +270,10 @@ struct WorkerCalendarView: View {
         return "\(comps.month ?? 0)월 \(comps.day ?? 0)일"
     }
 
-    private func formatWon(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        let number = formatter.string(from: NSNumber(value: Int(value))) ?? "0"
-        return "\(number)원"
-    }
 
-    private func formatHours(_ minutes: Int) -> String {
-        let h = minutes / 60
-        let m = minutes % 60
-        return "\(h)시간 \(m)분"
-    }
 
     private func formatRange(start: Date, end: Date?) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
+        let formatter = AppTime.displayFormatter("HH:mm")
         let s = formatter.string(from: start)
         let e = end.map { formatter.string(from: $0) } ?? "--:--"
         return "\(s) - \(e)"
@@ -434,8 +422,7 @@ struct WorkerCalendarView: View {
     }
 
     private func buildSummaries(from rows: [LogRow]) -> [DaySummary] {
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let parser = AppTime.isoWithFractionalSeconds
 
         var byDay: [Date: [WorkRow]] = [:]
         for row in rows {

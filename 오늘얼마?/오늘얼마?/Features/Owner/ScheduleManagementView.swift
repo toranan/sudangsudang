@@ -104,11 +104,9 @@ struct ScheduleManagementView: View {
     @State private var entryEditorContext: EntryEditorContext?
 
     private let cacheTTLSeconds: TimeInterval = 120
-    private let calendar = Calendar.current
+    private let calendar = AppTime.calendar
     private let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
+        let formatter = AppTime.displayFormatter("yyyy-MM-dd")
         return formatter
     }()
 
@@ -722,7 +720,7 @@ struct ScheduleManagementView: View {
                     weekday: draft.weekday,
                     check_in_time: draft.checkInTime,
                     check_out_time: draft.checkOutTime,
-                    updated_at: ISO8601DateFormatter().string(from: Date())
+                    updated_at: AppTime.isoString(from: Date())
                 )
                 _ = try await SupabaseManager.shared
                     .client
@@ -775,7 +773,7 @@ struct ScheduleManagementView: View {
             }
             let payload = UpdatePayload(
                 is_active: false,
-                updated_at: ISO8601DateFormatter().string(from: Date())
+                updated_at: AppTime.isoString(from: Date())
             )
 
             _ = try await SupabaseManager.shared
@@ -826,7 +824,7 @@ struct ScheduleManagementView: View {
                     worker_id: draft.workerId,
                     check_in_time: draft.checkInTime,
                     check_out_time: draft.checkOutTime,
-                    updated_at: ISO8601DateFormatter().string(from: Date())
+                    updated_at: AppTime.isoString(from: Date())
                 )
                 _ = try await SupabaseManager.shared
                     .client
@@ -1379,7 +1377,7 @@ private struct ScheduleEntryEditorSheet: View {
     @State private var endMinute: String = ""
     @State private var error: String?
 
-    private let calendar = Calendar.current
+    private let calendar = AppTime.calendar
 
     var body: some View {
         NavigationStack {

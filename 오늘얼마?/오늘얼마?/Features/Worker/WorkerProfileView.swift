@@ -359,7 +359,7 @@ struct WorkerProfileView: View {
 
     private func formatCareerDuration(from startDate: Date?) -> String {
         guard let startDate else { return "0일" }
-        let calendar = Calendar.current
+        let calendar = AppTime.calendar
         let start = calendar.startOfDay(for: startDate)
         let end = calendar.startOfDay(for: Date())
         let totalDays = max(0, calendar.dateComponents([.day], from: start, to: end).day ?? 0)
@@ -388,9 +388,7 @@ struct WorkerProfileView: View {
 
     private func formatDate(_ date: Date?) -> String? {
         guard let date else { return nil }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "yyyy.MM.dd"
+        let formatter = AppTime.displayFormatter("yyyy.MM.dd")
         return formatter.string(from: date)
     }
 
@@ -494,9 +492,7 @@ struct WorkerProfileView: View {
             ? nil
             : ratings.map(\.rating).reduce(0, +) / Double(ratings.count)
 
-        let dateOnlyFormatter = DateFormatter()
-        dateOnlyFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
+        let dateOnlyFormatter = AppTime.displayFormatter("yyyy-MM-dd")
         let todayKey = dateOnlyFormatter.string(from: Date())
         let schedulesToEvaluate = schedules.filter { $0.work_date <= todayKey }
         if schedulesToEvaluate.isEmpty {
@@ -514,10 +510,9 @@ struct WorkerProfileView: View {
 
         let earliestDate = schedulesToEvaluate
             .compactMap { dateOnlyFormatter.date(from: $0.work_date) }
-            .min() ?? Calendar.current.startOfDay(for: Date())
-        let iso = ISO8601DateFormatter()
-        let parserWithFractional = ISO8601DateFormatter()
-        parserWithFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            .min() ?? AppTime.calendar.startOfDay(for: Date())
+        let iso = AppTime.iso
+        let parserWithFractional = AppTime.isoWithFractionalSeconds
 
         let logs: [WorkLogEvalRow] = try await SupabaseManager.shared
             .client
@@ -625,9 +620,8 @@ struct WorkerProfileView: View {
     }
 
     private func parseISODate(_ raw: String) -> Date? {
-        let parserWithFractional = ISO8601DateFormatter()
-        parserWithFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let parser = ISO8601DateFormatter()
+        let parserWithFractional = AppTime.isoWithFractionalSeconds
+        let parser = AppTime.iso
         return parserWithFractional.date(from: raw) ?? parser.date(from: raw)
     }
 
@@ -650,6 +644,6 @@ struct WorkerProfileView: View {
         components.hour = hour
         components.minute = minute
         components.second = second
-        return Calendar.current.date(from: components)
+        return AppTime.calendar.date(from: components)
     }
 }

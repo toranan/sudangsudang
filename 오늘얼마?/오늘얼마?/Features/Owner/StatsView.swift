@@ -52,8 +52,8 @@ struct StatsView: View {
     @State private var lastMonthKey: String?
     private let cacheTTLSeconds: TimeInterval = 120
 
-    private let calendar = Calendar.current
-    private let isoFormatter = ISO8601DateFormatter()
+    private let calendar = AppTime.calendar
+    private let isoFormatter = AppTime.iso
 
     var body: some View {
         ScrollView {
@@ -252,18 +252,7 @@ struct StatsView: View {
         return "\(comps.month ?? 0)월 \(comps.day ?? 0)일 근무"
     }
 
-    private func formatWon(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        let number = formatter.string(from: NSNumber(value: Int(value))) ?? "0"
-        return "\(number)원"
-    }
 
-    private func formatHours(_ minutes: Int) -> String {
-        let h = minutes / 60
-        let m = minutes % 60
-        return "\(h)시간 \(m)분"
-    }
 
     private func makeMonthDays() -> [MonthDay] {
         var items: [MonthDay] = []
@@ -391,8 +380,7 @@ struct StatsView: View {
 
     private func buildSummaries(from rows: [LogRow]) -> [DaySummary] {
         var byDay: [Date: [WorkRow]] = [:]
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let dateFormatter = AppTime.isoWithFractionalSeconds
 
         for row in rows {
             let status = row.status ?? "pending"

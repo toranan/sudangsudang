@@ -32,7 +32,7 @@ struct OwnerMonthlyDetailView: View {
     @State private var isLoading = false
     @State private var loadError: String?
 
-    private let calendar = Calendar.current
+    private let calendar = AppTime.calendar
 
     var body: some View {
         ScrollView {
@@ -155,9 +155,8 @@ struct OwnerMonthlyDetailView: View {
     }
 
     private func buildTotals(workers: [WorkerRow], logs: [LogRow]) -> [UUID: Totals] {
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso = ISO8601DateFormatter()
+        let parser = AppTime.isoWithFractionalSeconds
+        let iso = AppTime.iso
 
         let wageByWorker = Dictionary(uniqueKeysWithValues: workers.map { ($0.id, $0.hourly_wage ?? 0) })
 
@@ -185,7 +184,7 @@ struct OwnerMonthlyDetailView: View {
     private func monthRangeISO(for date: Date) -> (String, String) {
         let start = calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
         let end = calendar.date(byAdding: .month, value: 1, to: start) ?? date
-        let iso = ISO8601DateFormatter()
+        let iso = AppTime.iso
         return (iso.string(from: start), iso.string(from: end))
     }
 
@@ -194,21 +193,6 @@ struct OwnerMonthlyDetailView: View {
         return max(0, Int(minutes))
     }
 
-    private func formatWon(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        let number = formatter.string(from: NSNumber(value: Int(value))) ?? "0"
-        return "\(number)원"
-    }
 
-    private func formatHours(_ minutes: Int) -> String {
-        let h = minutes / 60
-        let m = minutes % 60
-        return "\(h)시간 \(m)분"
-    }
 
-    private func normalizedStatus(_ status: String?) -> String {
-        let value = status?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return value.isEmpty ? "pending" : value
-    }
 }

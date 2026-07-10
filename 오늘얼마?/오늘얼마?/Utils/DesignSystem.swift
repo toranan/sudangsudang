@@ -3,6 +3,33 @@ import SwiftUI
 import UIKit
 #endif
 
+// 주요 액션(출근/퇴근, 승인 등)의 성공/실패를 촉각으로 알려주는 햅틱 헬퍼.
+enum Haptics {
+    static func success() {
+        #if canImport(UIKit)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        #endif
+    }
+
+    static func warning() {
+        #if canImport(UIKit)
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        #endif
+    }
+
+    static func error() {
+        #if canImport(UIKit)
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
+        #endif
+    }
+
+    static func tap() {
+        #if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
+    }
+}
+
 // Toss-like Color System (clean + friendly)
 extension Color {
     #if canImport(UIKit)

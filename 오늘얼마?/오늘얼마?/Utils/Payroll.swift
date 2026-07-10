@@ -67,7 +67,7 @@ enum PayrollCalculator {
     static func calcNightMinutes(checkIn: Date, checkOut: Date?) -> Int {
         guard let end = checkOut, end > checkIn else { return 0 }
 
-        let calendar = Calendar.current
+        let calendar = AppTime.calendar
         var dayCursor = calendar.startOfDay(for: checkIn)
         var total: Double = 0
 
@@ -115,11 +115,11 @@ enum PayrollCalculator {
         // Rule-of-thumb: if weekly working time >= 15h, add (weeklyHours/40)*8 hours.
         var cal = Calendar(identifier: .gregorian)
         cal.locale = Locale(identifier: "ko_KR")
+        cal.timeZone = AppTime.timeZone
         cal.firstWeekday = 2 // Monday
 
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso = ISO8601DateFormatter()
+        let parser = AppTime.isoWithFractionalSeconds
+        let iso = AppTime.iso
 
         var minutesByWeek: [String: Int] = [:]
         for (checkInAt, checkOutAt) in checkInOut {
@@ -298,7 +298,7 @@ struct PayrollLocalSettings: Codable {
 }
 
 enum PayrollPayday {
-    static func normalizedDay(_ day: Int, referenceMonth: Date = Date(), calendar: Calendar = .current) -> Int {
+    static func normalizedDay(_ day: Int, referenceMonth: Date = Date(), calendar: Calendar = AppTime.calendar) -> Int {
         let range = calendar.range(of: .day, in: .month, for: referenceMonth) ?? 1..<32
         let minDay = range.lowerBound
         let maxDay = range.upperBound - 1
@@ -310,7 +310,7 @@ enum PayrollPayday {
     static func nextPaydayDate(
         from now: Date = Date(),
         payday: Int,
-        calendar: Calendar = .current
+        calendar: Calendar = AppTime.calendar
     ) -> Date {
         let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
         let dayThisMonth = normalizedDay(payday, referenceMonth: monthStart, calendar: calendar)

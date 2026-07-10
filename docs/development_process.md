@@ -54,6 +54,57 @@
 - 남은 리스크:
 ```
 
+## 2026-07-11 구조 점검 및 기술 부채 정리
+
+### 문제
+
+전체 코드 점검에서 네 가지 구조적 문제를 확인했습니다.
+
+1. 급여/근태의 일·주·월 경계 계산이 기기 시간대를 따라감. 해외에서 앱을 열면 야간수당(22~06시) 경계와 월별 집계가 한국 기준과 어긋날 수 있음.
+2. `ISO8601DateFormatter`를 74곳에서 매번 새로 생성. 생성 비용이 큰 객체라 리스트 렌더링에서 낭비.
+3. `formatHours`, `formatWon`, 승인 상태 라벨/색상 함수가 9개 파일에 복사되어 있어 표기 기준이 갈라질 수 있는 구조.
+4. `WorkerHomeView.swift`가 3,053줄에 화면 5개를 포함. 탐색/수정 비용이 큼.
+
+추가로 핵심 액션(출근/퇴근, 승인)에 촉각 피드백이 없고, 처리 중 상태가 버튼 투명도로만 표현되어 "눌렸는지" 애매한 순간이 있었습니다.
+
+### 목표
+
+- 급여 계산은 기기 시간대와 무관하게 한국 시간(KST) 기준으로 고정
+- 포매터/캘린더를 공유 인스턴스로 통합
+- 중복 헬퍼를 한 파일로 모아 표기 기준 단일화
+- 거대 파일을 화면 단위로 분리
+- 출퇴근/승인에 햅틱과 진행 표시 추가
+
+### 구현
+
+- `Utils/AppTime.swift` (신규): KST 고정 `calendar`, 공유 ISO8601 파서/포매터, 포맷별 캐시되는 `displayFormatter`
+- `Utils/Formatters.swift` (신규): `formatHours`, `formatWon`, `normalizedStatus`, `statusLabel`, `statusColor` 전역 통합
+- `Utils/DesignSystem.swift`: `Haptics` 헬퍼 추가 (success/warning/error/tap)
+- `WorkerHomeView.swift` 분리 → `JoinStoreView.swift`, `CreatePersonalStoreView.swift`, `WorkerCheckInView.swift` (2,987줄 → 1,229줄 + 3개 파일)
+- 출근/퇴근 버튼: 처리 중 스피너 + "처리 중..." 표시, 성공/실패 햅틱
+- 승인/반려 처리에 성공/실패 햅틱
+
+### 의사결정
+
+- 시간대는 `Asia/Seoul` 고정을 선택했습니다.
+  - 이유: 한국 사업장 대상 서비스이고, 급여 정산 기준은 사용자의 현재 위치가 아니라 사업장 기준이어야 하기 때문입니다.
+- 중복 헬퍼는 전역 함수로 통합했습니다.
+  - 이유: 기존 호출부(`formatHours(...)`)를 그대로 두고 정의만 제거하면 되므로 diff가 최소화됩니다.
+- 파일 분리는 뷰 경계 그대로 잘라 이동만 했습니다.
+  - 이유: 리팩터링과 로직 변경을 한 커밋에 섞지 않기 위해서입니다.
+
+### 검증
+
+- `xcodebuild` iOS Simulator generic build 성공
+- UI 변화는 햅틱/버튼 스피너뿐이며 레이아웃·표기 문자열은 동일
+- 남은 리스크: 해외 시간대 기기에서의 동작은 시뮬레이터 시간대 변경으로 추가 확인 필요
+
+### 남은 개선
+
+- 스켈레톤 로딩(`.redacted`)으로 첫 로딩 레이아웃 점프 제거
+- 루트 `NavigationView`(deprecated) → `NavigationStack` 정리
+- VoiceOver 접근성 라벨 추가
+
 ## 2026-07-10 매장별 RAG 챗봇
 
 ### 문제
