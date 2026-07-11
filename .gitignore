@@ -12,3 +12,7 @@ DerivedData/
 *.bak
 photo/
 */photo/
+
+# 시크릿 파일은 경로 무관 전부 제외 (한글 경로 인코딩 이슈 회피)
+**/Secrets.xcconfig
+**/.env
