@@ -35,15 +35,22 @@ final class SupabaseManager {
         #if canImport(Supabase)
         self.authClient = SupabaseClient(supabaseURL: url, supabaseKey: fallbackAnonKey)
         self.client = self.authClient
-        self.customAccessToken = UserDefaults.standard.string(forKey: customAccessTokenKey)
+        self.customAccessToken = SecureStore.string(forKey: customAccessTokenKey)
+        if customAccessToken == nil,
+           let legacyToken = UserDefaults.standard.string(forKey: customAccessTokenKey) {
+            customAccessToken = legacyToken
+            if SecureStore.set(legacyToken, forKey: customAccessTokenKey) {
+                UserDefaults.standard.removeObject(forKey: customAccessTokenKey)
+            }
+        }
         if let savedUserId = UserDefaults.standard.string(forKey: customUserIdKey) {
             self.customUserId = UUID(uuidString: savedUserId)
         }
 
-        if let token = customAccessToken {
-            print("DEBUG: found customAccessToken in UserDefaults")
+        if customAccessToken != nil {
+            print("DEBUG: found custom access token")
         } else {
-            print("DEBUG: no customAccessToken in UserDefaults")
+            print("DEBUG: no custom access token")
         }
         
         if let token = customAccessToken, let userId = customUserId {
@@ -230,13 +237,17 @@ final class SupabaseManager {
     func setCustomSession(accessToken: String, userId: UUID) {
         customAccessToken = accessToken
         customUserId = userId
-        UserDefaults.standard.set(accessToken, forKey: customAccessTokenKey)
+        let didPersistToken = SecureStore.set(accessToken, forKey: customAccessTokenKey)
+        #if DEBUG
+        if !didPersistToken {
+            print("DEBUG: failed to persist custom access token in Keychain")
+        }
+        #endif
+        UserDefaults.standard.removeObject(forKey: customAccessTokenKey)
         UserDefaults.standard.set(userId.uuidString, forKey: customUserIdKey)
 
         let options = SupabaseClientOptions(
-            auth: .init(accessToken: { [weak self] in
-                self?.customAccessToken
-            })
+            auth: .init(accessToken: { accessToken })
         )
         client = SupabaseClient(supabaseURL: supabaseURL, supabaseKey: supabaseAnonKey, options: options)
     }
@@ -244,6 +255,7 @@ final class SupabaseManager {
     func clearCustomSession() {
         customAccessToken = nil
         customUserId = nil
+        SecureStore.removeValue(forKey: customAccessTokenKey)
         UserDefaults.standard.removeObject(forKey: customAccessTokenKey)
         UserDefaults.standard.removeObject(forKey: customUserIdKey)
         client = authClient

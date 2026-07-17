@@ -9,6 +9,31 @@ import KakaoSDKAuth
 import KakaoSDKUser
 #endif
 
+struct AuthBrandView: View {
+    var body: some View {
+        VStack(spacing: 24) {
+            Image("wallet_mascot")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 160, height: 160)
+                .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+                .padding(.bottom, 20)
+
+            VStack(spacing: 12) {
+                Text("사장님, 알바생 모두")
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .foregroundColor(.appTextSecondary)
+
+                Text("간편하게 수당수당")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundColor(.appTextPrimary)
+            }
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 24)
+        }
+    }
+}
+
 struct AuthView: View {
     enum Step {
         case role
@@ -31,24 +56,7 @@ struct AuthView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            Image("wallet_mascot")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 160, height: 160)
-                .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
-                .padding(.bottom, 20)
-
-            VStack(spacing: 12) {
-                Text("사장님, 알바생 모두")
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
-                    .foregroundColor(.appTextSecondary)
-                
-                Text("간편하게 수당수당")
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .foregroundColor(.appTextPrimary)
-            }
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 24)
+            AuthBrandView()
 
             switch step {
             case .role:

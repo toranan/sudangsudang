@@ -11,6 +11,7 @@ extension Notification.Name {
 
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @State private var isRestoringInitialSession: Bool = true
     @State private var isLoggedIn: Bool = false
     @State private var userRole: Profile.Role? = nil // .owner or .worker
     @State private var pendingInvite: InviteManager.InvitePreview? = nil
@@ -40,8 +41,18 @@ struct ContentView: View {
     }
     
     var body: some View {
-        NavigationView {
-            if isLoggedIn {
+        ZStack {
+            Color.appBackground
+                .ignoresSafeArea()
+
+            if isRestoringInitialSession {
+                VStack(spacing: 24) {
+                    Spacer()
+                    AuthBrandView()
+                    Spacer()
+                }
+                .padding(.top, 40)
+            } else if isLoggedIn {
                 if userRole == .owner {
                     OwnerRootView()
                 } else if userRole == .worker {
@@ -56,6 +67,7 @@ struct ContentView: View {
         }
         .task {
             await restoreSessionIfPossible()
+            isRestoringInitialSession = false
             await loadPendingInviteIfNeeded()
         }
         .onChange(of: scenePhase) { phase in
