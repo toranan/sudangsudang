@@ -1,6 +1,6 @@
 # 기술 스택과 선택 근거
 
-> 최종 확인: 2026-07-15. 이 문서는 현재 저장소에서 확인한 구현만 기록합니다.
+> 최종 확인: 2026-07-17. 이 문서는 현재 저장소에서 확인한 구현만 기록합니다.
 
 ## iOS Client
 
@@ -12,7 +12,7 @@
 | 실시간 표시 | ActivityKit, WidgetKit | 출근 중 Live Activity 관련 코드 |
 | 분석 | Firebase Analytics | 앱 이벤트 수집 |
 
-SwiftUI는 역할별 정보 구조를 빠르게 반복하기 위해 선택했습니다. 네트워크 호출은 `async/await`를 사용하지만, Swift 6 언어 모드 전환 전에 actor 격리 경고를 해소해야 합니다.
+SwiftUI는 역할별 정보 구조를 빠르게 반복하기 위해 선택했습니다. 네트워크 호출은 `async/await`를 사용하며, 프로젝트는 현재 Swift 5 언어 모드입니다. Swift 6 언어 모드 전환 전에는 격리 규칙을 별도로 점검해야 합니다.
 
 ## Backend
 
@@ -61,7 +61,8 @@ SwiftUI App
 
 ## 검증 상태
 
-- 2026-07-15 generic iOS Simulator 빌드 성공
+- 2026-07-17 generic iOS Simulator 빌드 성공
 - DB 제약과 RLS는 migration으로 관리
-- 자동화 테스트는 smoke test 1개뿐이며 계산/권한 회귀 테스트가 필요
-- `onChange` deprecation과 Swift 6 actor 격리 경고가 남아 있음
+- 급여 스냅샷, 야간수당, 최신 요청 검증 단위 테스트 5개 통과
+- 급여 경계값과 RLS 통합 테스트는 추가 보강 필요
+- 구식 SwiftUI `onChange` API의 deprecation 경고가 남아 있음

@@ -1,4 +1,4 @@
-# 오늘얼마?
+# 수당수당
 
 소규모 사업장의 근태, 예상 급여, 운영 문서를 하나로 관리하는 iOS 앱입니다.
 
@@ -21,7 +21,7 @@
 | iOS | Swift, SwiftUI, Swift Concurrency, ActivityKit |
 | Backend | Supabase Auth, PostgreSQL, RLS, Edge Functions |
 | AI | OpenAI Embeddings, pgvector, Gemini |
-| 품질 상태 | 2026-07-15 Simulator 빌드 성공, 유의미한 자동화 테스트는 보강 필요 |
+| 품질 상태 | 2026-07-17 Simulator 빌드 및 단위 테스트 5개 통과 |
 
 ## Problems
 

@@ -1,4 +1,4 @@
-# Implementation Plan - 오늘얼마? (How much today?)
+# Implementation Plan - 수당수당
 
 ## Goal Description
 Develop an iOS application for store owners and part-time workers to manage attendance and calculate wages.
