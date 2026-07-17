@@ -7,6 +7,7 @@ Config/.env
 *.xcuserstate
 xcuserdata/
 DerivedData/
+**/supabase/.temp/
 
 # Local backups and generated assets not intended for source control
 *.bak
@@ -16,3 +17,6 @@ photo/
 # 시크릿 파일은 경로 무관 전부 제외 (한글 경로 인코딩 이슈 회피)
 **/Secrets.xcconfig
 **/.env
+
+# Public README에서 제외하는 개인정보 포함 원본 스크린샷
+screenshot/private/
