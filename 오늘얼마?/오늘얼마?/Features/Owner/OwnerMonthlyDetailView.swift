@@ -11,6 +11,7 @@ struct OwnerMonthlyDetailView: View {
         let name: String
         let phone: String?
         let hourly_wage: Double?
+        let apply_night_allowance: Bool?
         let is_active: Bool?
     }
 
@@ -20,6 +21,8 @@ struct OwnerMonthlyDetailView: View {
         let check_in_at: String
         let check_out_at: String?
         let status: String?
+        let applied_hourly_wage: Double?
+        let applied_night_allowance: Bool?
     }
 
     struct Totals {
@@ -126,7 +129,7 @@ struct OwnerMonthlyDetailView: View {
             let rows: [WorkerRow] = try await SupabaseManager.shared
                 .client
                 .from("workers")
-                .select("id,name,phone,hourly_wage,is_active")
+                .select("id,name,phone,hourly_wage,apply_night_allowance,is_active")
                 .eq("store_id", value: storeId.uuidString)
                 .order("joined_at", ascending: true)
                 .execute()
@@ -137,7 +140,7 @@ struct OwnerMonthlyDetailView: View {
             let logs: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,worker_id,check_in_at,check_out_at,status")
+                .select("id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
                 .eq("store_id", value: storeId.uuidString)
                 .gte("check_in_at", value: startISO)
                 .lt("check_in_at", value: endISO)
@@ -159,8 +162,10 @@ struct OwnerMonthlyDetailView: View {
         let iso = AppTime.iso
 
         let wageByWorker = Dictionary(uniqueKeysWithValues: workers.map { ($0.id, $0.hourly_wage ?? 0) })
+        let nightAllowanceByWorker = Dictionary(uniqueKeysWithValues: workers.map { ($0.id, $0.apply_night_allowance ?? false) })
 
         var minutesByWorker: [UUID: Int] = [:]
+        var payByWorker: [UUID: Double] = [:]
         for log in logs {
             guard normalizedStatus(log.status) == "approved" else { continue }
             let hasCheckout = !(log.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
@@ -170,13 +175,19 @@ struct OwnerMonthlyDetailView: View {
             guard let end = log.check_out_at.flatMap({ parser.date(from: $0) ?? iso.date(from: $0) }) else { continue }
             let minutes = calcMinutes(checkIn: start, checkOut: end)
             minutesByWorker[log.worker_id, default: 0] += minutes
+            payByWorker[log.worker_id, default: 0] += PayrollCalculator.grossPay(
+                checkIn: start,
+                checkOut: end,
+                appliedHourlyWage: log.applied_hourly_wage,
+                appliedNightAllowance: log.applied_night_allowance,
+                fallbackHourlyWage: wageByWorker[log.worker_id] ?? 0,
+                fallbackNightAllowance: nightAllowanceByWorker[log.worker_id] ?? false
+            )
         }
 
         var result: [UUID: Totals] = [:]
         for (workerId, minutes) in minutesByWorker {
-            let wage = wageByWorker[workerId] ?? 0
-            let pay = Double(minutes) / 60.0 * wage
-            result[workerId] = Totals(minutes: minutes, pay: pay)
+            result[workerId] = Totals(minutes: minutes, pay: payByWorker[workerId] ?? 0)
         }
         return result
     }

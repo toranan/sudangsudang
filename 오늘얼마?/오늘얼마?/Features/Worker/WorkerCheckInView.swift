@@ -570,17 +570,17 @@ struct WorkerCheckInView: View {
 
 private extension WorkerCheckInView {
     var displayMinutes: Int {
-        isCheckedIn ? liveMinutes : store.todayMinutes
+        isCheckedIn ? store.todayMinutes + liveMinutes : store.todayMinutes
     }
 
     var displayPay: Double {
-        Double(displayMinutes) / 60.0 * store.hourlyWage
+        store.todayPay
     }
 
     func updateLiveMinutes() {
         guard isCheckedIn, let checkIn = currentCheckInAt else { return }
         let minutes = floor(Date().timeIntervalSince(checkIn) / 60.0)
-        liveMinutes = max(store.todayMinutes, Int(minutes))
+        liveMinutes = max(0, Int(minutes))
     }
 
     func persistLocalPayrollSettings() {
@@ -631,24 +631,22 @@ private extension WorkerCheckInView {
         let parser = AppTime.isoWithFractionalSeconds
         let iso = AppTime.iso
 
-        let totalMinutes = counted.reduce(0) { partial, log in
+        let gross = counted.reduce(0.0) { partial, log in
             let start = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
             let end = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
-            return partial + PayrollCalculator.calcMinutes(checkIn: start, checkOut: end)
+            return partial + PayrollCalculator.grossPay(
+                checkIn: start,
+                checkOut: end,
+                appliedHourlyWage: log.applied_hourly_wage,
+                appliedNightAllowance: log.applied_night_allowance,
+                fallbackHourlyWage: wage,
+                fallbackNightAllowance: applyNightAllowance
+            )
         }
-        let totalNightMinutes = counted.reduce(0) { partial, log in
-            let start = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
-            let end = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
-            return partial + PayrollCalculator.calcNightMinutes(checkIn: start, checkOut: end)
-        }
-        let gross = Double(totalMinutes) / 60.0 * wage
-        let nightPremium = applyNightAllowance
-            ? Double(totalNightMinutes) / 60.0 * wage * PayrollCalculator.nightPremiumRate
-            : 0
         let weeklyAllowance = applyWeeklyAllowance
             ? PayrollCalculator.estimateWeeklyAllowancePay(checkInOut: counted.map { ($0.check_in_at, $0.check_out_at) }, wage: wage)
             : 0
-        return max(0, gross + nightPremium + weeklyAllowance)
+        return max(0, gross + weeklyAllowance)
     }
 
     func approvedMonthLogsForNet() -> [WorkLogRow] {
@@ -982,7 +980,7 @@ private extension WorkerCheckInView {
                 )
             } else {
                 currentCheckInAt = nil
-                liveMinutes = store.todayMinutes
+                liveMinutes = 0
                 await WorkerLiveActivityManager.shared.end(storeId: store.id)
             }
         } catch {
@@ -1142,6 +1140,8 @@ private extension WorkerCheckInView {
         let check_in_at: String
         let check_out_at: String?
         let status: String?
+        let applied_hourly_wage: Double?
+        let applied_night_allowance: Bool?
     }
 
     @MainActor
@@ -1157,7 +1157,7 @@ private extension WorkerCheckInView {
             let rows: [WorkLogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,check_in_at,check_out_at,status")
+                .select("id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
                 .eq("store_id", value: store.id.uuidString)
                 .eq("worker_id", value: store.workerId.uuidString)
                 .gte("check_in_at", value: iso.string(from: monthStart))
@@ -1297,6 +1297,8 @@ private struct WorkerStoreHistoryView: View {
         let check_in_at: String
         let check_out_at: String?
         let status: String?
+        let applied_hourly_wage: Double?
+        let applied_night_allowance: Bool?
     }
 
     let storeName: String
@@ -1403,7 +1405,7 @@ private struct WorkerStoreHistoryView: View {
             let rows: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,check_in_at,check_out_at,status")
+                .select("id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
                 .eq("store_id", value: storeId.uuidString)
                 .eq("worker_id", value: workerId.uuidString)
                 .order("check_in_at", ascending: false)
@@ -1433,13 +1435,14 @@ private struct WorkerStoreHistoryView: View {
     private func totalPay(_ log: LogRow) -> Double {
         let start = parseDate(log.check_in_at)
         let end = log.check_out_at.map(parseDate(_:))
-        let minutes = PayrollCalculator.calcMinutes(checkIn: start, checkOut: end)
-        let base = Double(minutes) / 60.0 * hourlyWage
-        let nightMinutes = PayrollCalculator.calcNightMinutes(checkIn: start, checkOut: end)
-        let nightPremium = applyNightAllowance
-            ? Double(nightMinutes) / 60.0 * hourlyWage * PayrollCalculator.nightPremiumRate
-            : 0
-        return base + nightPremium
+        return PayrollCalculator.grossPay(
+            checkIn: start,
+            checkOut: end,
+            appliedHourlyWage: log.applied_hourly_wage,
+            appliedNightAllowance: log.applied_night_allowance,
+            fallbackHourlyWage: hourlyWage,
+            fallbackNightAllowance: applyNightAllowance
+        )
     }
 
 

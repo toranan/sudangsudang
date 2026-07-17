@@ -593,7 +593,7 @@
 				CODE_SIGN_ENTITLEMENTS = "오늘얼마?/오늘얼마?.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = YA6CU6MN98;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -611,7 +611,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = seungwonahn.howmuchtoday;
 				PRODUCT_NAME = HowMuchToday;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -636,7 +636,7 @@
 				CODE_SIGN_ENTITLEMENTS = "오늘얼마?/오늘얼마?.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = YA6CU6MN98;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -654,7 +654,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = seungwonahn.howmuchtoday;
 				PRODUCT_NAME = HowMuchToday;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -688,7 +688,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/오늘얼마?.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/오늘얼마?";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HowMuchToday.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HowMuchToday";
 			};
 			name = Debug;
 		};
@@ -710,7 +710,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/오늘얼마?.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/오늘얼마?";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HowMuchToday.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HowMuchToday";
 			};
 			name = Release;
 		};

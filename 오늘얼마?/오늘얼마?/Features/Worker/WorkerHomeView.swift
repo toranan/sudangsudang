@@ -58,6 +58,8 @@ struct WorkerHomeView: View {
         let check_in_at: String
         let check_out_at: String?
         let status: String?
+        let applied_hourly_wage: Double?
+        let applied_night_allowance: Bool?
     }
 
     @State private var storePays: [StorePay] = []
@@ -68,6 +70,7 @@ struct WorkerHomeView: View {
     @State private var loadError: String?
     @State private var lastLoadedAt: Date?
     @State private var lastLoadedMonthKey: String?
+    @State private var latestLoadRequestID: UUID?
     @State private var didBackfillPersonalLinks = false
     @State private var selectedMonth: Date = AppTime.calendar.date(from: AppTime.calendar.dateComponents([.year, .month], from: Date())) ?? Date()
     @State private var isPresentingJoinStore = false
@@ -477,7 +480,21 @@ struct WorkerHomeView: View {
             NavigationLink {
                 WorkerStoreKnowledgeView(storeId: store.id, storeName: store.name)
             } label: {
-                workerQuickMenuRow(icon: "megaphone.fill", title: "공지 · 매뉴얼 · 챗봇")
+                workerQuickMenuRow(icon: "megaphone.fill", title: "공지 · 매뉴얼")
+            }
+            .buttonStyle(.plain)
+
+            Divider()
+                .padding(.leading, 56)
+
+            NavigationLink {
+                WorkerStoreKnowledgeView(
+                    storeId: store.id,
+                    storeName: store.name,
+                    initialPanel: .chat
+                )
+            } label: {
+                workerQuickMenuRow(icon: "bubble.left.and.bubble.right.fill", title: "챗봇")
             }
             .buttonStyle(.plain)
         }
@@ -727,9 +744,15 @@ struct WorkerHomeView: View {
             return
         }
 
+        let requestID = UUID()
+        latestLoadRequestID = requestID
         isLoading = true
         loadError = nil
-        defer { isLoading = false }
+        defer {
+            if latestLoadRequestID == requestID {
+                isLoading = false
+            }
+        }
         do {
             let userId = try await SupabaseManager.shared.currentUserId()
             if !didBackfillPersonalLinks {
@@ -782,6 +805,7 @@ struct WorkerHomeView: View {
             let activeWorkers = workers.filter { $0.is_active ?? true }
 
             if activeWorkers.isEmpty {
+                guard latestLoadRequestID == requestID else { return }
                 storePays = []
                 selectedStoreId = nil
                 isStoreDropdownExpanded = false
@@ -797,7 +821,7 @@ struct WorkerHomeView: View {
             let logs: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("store_id,worker_id,check_in_at,check_out_at,status")
+                .select("store_id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
                 .in("worker_id", values: workerIds)
                 .gte("check_in_at", value: iso.string(from: monthStart))
                 .lt("check_in_at", value: iso.string(from: monthEnd))
@@ -837,32 +861,34 @@ struct WorkerHomeView: View {
 
                 var monthMinutes = 0
                 var todayMinutes = 0
-                var monthNightMinutes = 0
-                var todayNightMinutes = 0
+                var monthGross = 0.0
+                var todayGross = 0.0
 
                 for log in countedLogs {
                     let checkIn = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
                     let checkOut = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
                     let minutes = WorkerHomeView.calcMinutes(checkIn: checkIn, checkOut: checkOut)
-                    let nightMinutes = PayrollCalculator.calcNightMinutes(checkIn: checkIn, checkOut: checkOut)
+                    let gross = PayrollCalculator.grossPay(
+                        checkIn: checkIn,
+                        checkOut: checkOut,
+                        appliedHourlyWage: log.applied_hourly_wage,
+                        appliedNightAllowance: log.applied_night_allowance,
+                        fallbackHourlyWage: wage,
+                        fallbackNightAllowance: applyNightAllowance
+                    )
                     monthMinutes += minutes
-                    monthNightMinutes += nightMinutes
+                    monthGross += gross
                     if checkIn >= todayStart && checkIn < tomorrow {
                         todayMinutes += minutes
-                        todayNightMinutes += nightMinutes
+                        todayGross += gross
                     }
                 }
 
-                let monthBasePay = Double(monthMinutes) / 60.0 * wage
-                let monthNightPremium = applyNightAllowance ? Double(monthNightMinutes) / 60.0 * wage * PayrollCalculator.nightPremiumRate : 0
-                let monthGross = monthBasePay + monthNightPremium
                 let weeklyAllowance = applyWeeklyAllowance
                     ? PayrollCalculator.estimateWeeklyAllowancePay(checkInOut: countedLogs.map { ($0.check_in_at, $0.check_out_at) }, wage: wage)
                     : 0
                 let breakdown = PayrollCalculator.deductionBreakdown(gross: monthGross + weeklyAllowance, type: deductionType)
                 let monthNet = max(0, monthGross + weeklyAllowance - breakdown.totalDeduction)
-                let todayBasePay = Double(todayMinutes) / 60.0 * wage
-                let todayNightPremium = applyNightAllowance ? Double(todayNightMinutes) / 60.0 * wage * PayrollCalculator.nightPremiumRate : 0
 
                 let storePay = StorePay(
                     id: storeId,
@@ -875,7 +901,7 @@ struct WorkerHomeView: View {
                     deductionType: deductionType,
                     payday: payday,
                     todayMinutes: todayMinutes,
-                    todayPay: todayBasePay + todayNightPremium,
+                    todayPay: todayGross,
                     monthMinutes: monthMinutes,
                     monthPay: monthGross,
                     monthNetPay: monthNet
@@ -883,6 +909,7 @@ struct WorkerHomeView: View {
                 result.append(storePay)
             }
 
+            guard latestLoadRequestID == requestID else { return }
             storePays = result
             reconcileSelectedStore()
             lastLoadedAt = now
@@ -891,6 +918,7 @@ struct WorkerHomeView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard latestLoadRequestID == requestID else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -1227,4 +1255,3 @@ struct WorkerHomeView: View {
     }
 
 }
-

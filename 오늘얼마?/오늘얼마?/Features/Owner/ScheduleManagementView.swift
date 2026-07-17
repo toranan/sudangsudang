@@ -95,10 +95,11 @@ struct ScheduleManagementView: View {
     @State private var lastStoresLoadedAt: Date?
     @State private var lastStoreScopedKey: String?
     @State private var lastStoreScopedLoadedAt: Date?
-    @State private var loadingStoreScopedKey: String?
     @State private var lastMonthScopedKey: String?
     @State private var lastMonthScopedLoadedAt: Date?
-    @State private var loadingMonthScopedKey: String?
+    @State private var storesRequest = LatestRequest()
+    @State private var storeScopedRequest = LatestRequest()
+    @State private var monthScopedRequest = LatestRequest()
 
     @State private var isPresentingTemplateManager = false
     @State private var entryEditorContext: EntryEditorContext?
@@ -408,6 +409,8 @@ struct ScheduleManagementView: View {
     @MainActor
     private func loadStoreScopedData(force: Bool) async {
         guard let storeId = selectedStoreId else {
+            storeScopedRequest.invalidate()
+            monthScopedRequest.invalidate()
             workers = []
             templates = []
             entries = []
@@ -417,7 +420,6 @@ struct ScheduleManagementView: View {
 
         let key = storeId.uuidString
         let now = Date()
-        if loadingStoreScopedKey == key { return }
         if !force,
            lastStoreScopedKey == key,
            let lastStoreScopedLoadedAt,
@@ -425,11 +427,13 @@ struct ScheduleManagementView: View {
             return
         }
 
-        loadingStoreScopedKey = key
-        defer { loadingStoreScopedKey = nil }
-        await loadWorkers()
-        await loadTemplates()
+        let requestID = storeScopedRequest.begin()
+        await loadWorkers(storeId: storeId, requestID: requestID)
+        guard isCurrentStoreRequest(requestID, storeId: storeId) else { return }
+        await loadTemplates(storeId: storeId, requestID: requestID)
+        guard isCurrentStoreRequest(requestID, storeId: storeId) else { return }
         await loadMonthScopedData(force: force)
+        guard isCurrentStoreRequest(requestID, storeId: storeId) else { return }
         lastStoreScopedKey = key
         lastStoreScopedLoadedAt = Date()
     }
@@ -437,14 +441,15 @@ struct ScheduleManagementView: View {
     @MainActor
     private func loadMonthScopedData(force: Bool) async {
         guard let storeId = selectedStoreId else {
+            monthScopedRequest.invalidate()
             entries = []
             selectedDate = nil
             return
         }
 
-        let key = "\(storeId.uuidString)|\(monthCacheKey(currentMonth))"
+        let requestedMonth = currentMonth
+        let key = "\(storeId.uuidString)|\(monthCacheKey(requestedMonth))"
         let now = Date()
-        if loadingMonthScopedKey == key { return }
         if !force,
            lastMonthScopedKey == key,
            let lastMonthScopedLoadedAt,
@@ -452,12 +457,30 @@ struct ScheduleManagementView: View {
             return
         }
 
-        loadingMonthScopedKey = key
-        defer { loadingMonthScopedKey = nil }
-        await ensureTemplateEntriesForCurrentMonth()
-        await loadEntries()
+        let requestID = monthScopedRequest.begin()
+        let requestedTemplates = templates
+        await ensureTemplateEntries(
+            storeId: storeId,
+            month: requestedMonth,
+            templates: requestedTemplates,
+            requestID: requestID,
+            key: key
+        )
+        guard isCurrentMonthRequest(requestID, key: key) else { return }
+        await loadEntries(storeId: storeId, month: requestedMonth, requestID: requestID, key: key)
+        guard isCurrentMonthRequest(requestID, key: key) else { return }
         lastMonthScopedKey = key
         lastMonthScopedLoadedAt = Date()
+    }
+
+    private func isCurrentStoreRequest(_ requestID: UUID, storeId: UUID) -> Bool {
+        storeScopedRequest.isCurrent(requestID) && selectedStoreId == storeId
+    }
+
+    private func isCurrentMonthRequest(_ requestID: UUID, key: String) -> Bool {
+        guard let storeId = selectedStoreId else { return false }
+        let currentKey = "\(storeId.uuidString)|\(monthCacheKey(currentMonth))"
+        return monthScopedRequest.isCurrent(requestID) && currentKey == key
     }
 
     @MainActor
@@ -471,6 +494,7 @@ struct ScheduleManagementView: View {
            now.timeIntervalSince(lastStoresLoadedAt) < cacheTTLSeconds {
             return
         }
+        let requestID = storesRequest.begin()
         do {
             loadError = nil
             let ownerId = try await SupabaseManager.shared.currentUserId()
@@ -483,6 +507,7 @@ struct ScheduleManagementView: View {
                 .execute()
                 .value
 
+            guard storesRequest.isCurrent(requestID) else { return }
             stores = rows
             lastStoresLoadedAt = Date()
             if selectedStoreId == nil || !rows.contains(where: { $0.id == selectedStoreId }) {
@@ -492,17 +517,14 @@ struct ScheduleManagementView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard storesRequest.isCurrent(requestID) else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
 
     @MainActor
-    private func loadWorkers() async {
-        guard let storeId = selectedStoreId else {
-            workers = []
-            return
-        }
+    private func loadWorkers(storeId: UUID, requestID: UUID) async {
         #if canImport(Supabase)
         do {
             let rows: [WorkerOption] = try await SupabaseManager.shared
@@ -514,22 +536,20 @@ struct ScheduleManagementView: View {
                 .execute()
                 .value
 
+            guard isCurrentStoreRequest(requestID, storeId: storeId) else { return }
             workers = rows.filter { $0.is_active ?? true }
         } catch {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard isCurrentStoreRequest(requestID, storeId: storeId) else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
 
     @MainActor
-    private func loadTemplates() async {
-        guard let storeId = selectedStoreId else {
-            templates = []
-            return
-        }
+    private func loadTemplates(storeId: UUID, requestID: UUID) async {
         #if canImport(Supabase)
         do {
             let rows: [WeeklyTemplateRow] = try await SupabaseManager.shared
@@ -543,25 +563,32 @@ struct ScheduleManagementView: View {
                 .execute()
                 .value
 
+            guard isCurrentStoreRequest(requestID, storeId: storeId) else { return }
             templates = rows
         } catch {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard isCurrentStoreRequest(requestID, storeId: storeId) else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
 
     @MainActor
-    private func ensureTemplateEntriesForCurrentMonth() async {
-        guard let storeId = selectedStoreId else { return }
+    private func ensureTemplateEntries(
+        storeId: UUID,
+        month: Date,
+        templates: [WeeklyTemplateRow],
+        requestID: UUID,
+        key: String
+    ) async {
         let activeTemplates = templates.filter { $0.is_active ?? true }
         guard !activeTemplates.isEmpty else { return }
 
         #if canImport(Supabase)
         do {
-            let monthStart = firstDay(of: currentMonth)
+            let monthStart = firstDay(of: month)
             let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? monthStart
             let startText = dayFormatter.string(from: monthStart)
             let endText = dayFormatter.string(from: monthEnd)
@@ -628,6 +655,7 @@ struct ScheduleManagementView: View {
             }
 
             if !inserts.isEmpty {
+                guard isCurrentMonthRequest(requestID, key: key) else { return }
                 _ = try await SupabaseManager.shared
                     .client
                     .from("schedule_entries")
@@ -642,25 +670,24 @@ struct ScheduleManagementView: View {
             if message.contains("duplicate key") {
                 return
             }
+            guard isCurrentMonthRequest(requestID, key: key) else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
 
     @MainActor
-    private func loadEntries() async {
-        guard let storeId = selectedStoreId else {
-            entries = []
-            selectedDate = nil
-            return
-        }
-
+    private func loadEntries(storeId: UUID, month: Date, requestID: UUID, key: String) async {
         #if canImport(Supabase)
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if isCurrentMonthRequest(requestID, key: key) {
+                isLoading = false
+            }
+        }
         do {
             loadError = nil
-            let monthStart = firstDay(of: currentMonth)
+            let monthStart = firstDay(of: month)
             let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? monthStart
             let startText = dayFormatter.string(from: monthStart)
             let endText = dayFormatter.string(from: monthEnd)
@@ -677,13 +704,14 @@ struct ScheduleManagementView: View {
                 .execute()
                 .value
 
+            guard isCurrentMonthRequest(requestID, key: key) else { return }
             entries = rows
 
             if let selectedDate,
-               calendar.isDate(selectedDate, equalTo: currentMonth, toGranularity: .month) {
+               calendar.isDate(selectedDate, equalTo: month, toGranularity: .month) {
                 // keep current selection
             } else {
-                if calendar.isDate(Date(), equalTo: currentMonth, toGranularity: .month) {
+                if calendar.isDate(Date(), equalTo: month, toGranularity: .month) {
                     selectedDate = Date()
                 } else {
                     selectedDate = monthStart
@@ -693,6 +721,7 @@ struct ScheduleManagementView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard isCurrentMonthRequest(requestID, key: key) else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -755,7 +784,7 @@ struct ScheduleManagementView: View {
                     .execute()
             }
 
-            await loadTemplates()
+            await loadStoreScopedData(force: true)
             await loadMonthScopedData(force: true)
         } catch {
             loadError = AppErrorMessage.userMessage(error)
@@ -793,8 +822,7 @@ struct ScheduleManagementView: View {
                 .gte("work_date", value: todayText)
                 .execute()
 
-            await loadTemplates()
-            await loadEntries()
+            await loadStoreScopedData(force: true)
             lastMonthScopedKey = nil
             lastMonthScopedLoadedAt = nil
         } catch {
@@ -860,7 +888,7 @@ struct ScheduleManagementView: View {
             }
 
             entryEditorContext = nil
-            await loadEntries()
+            await loadMonthScopedData(force: true)
         } catch {
             loadError = AppErrorMessage.userMessage(error)
         }

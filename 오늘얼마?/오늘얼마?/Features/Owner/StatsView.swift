@@ -12,6 +12,7 @@ struct StatsView: View {
     struct LogWorker: Decodable {
         let name: String
         let hourly_wage: Double?
+        let apply_night_allowance: Bool?
     }
 
     struct LogRow: Decodable, Identifiable {
@@ -21,6 +22,8 @@ struct StatsView: View {
         let status: String?
         let worker_id: UUID
         let workers: LogWorker?
+        let applied_hourly_wage: Double?
+        let applied_night_allowance: Bool?
     }
 
     struct DaySummary: Identifiable {
@@ -50,6 +53,8 @@ struct StatsView: View {
     @State private var lastStoresLoadedAt: Date?
     @State private var lastMonthLoadedAt: Date?
     @State private var lastMonthKey: String?
+    @State private var storesRequest = LatestRequest()
+    @State private var monthRequest = LatestRequest()
     private let cacheTTLSeconds: TimeInterval = 120
 
     private let calendar = AppTime.calendar
@@ -296,8 +301,13 @@ struct StatsView: View {
            now.timeIntervalSince(lastStoresLoadedAt) < cacheTTLSeconds {
             return
         }
+        let requestID = storesRequest.begin()
         isLoadingStores = true
-        defer { isLoadingStores = false }
+        defer {
+            if storesRequest.isCurrent(requestID) {
+                isLoadingStores = false
+            }
+        }
         do {
             let ownerId = try await SupabaseManager.shared.currentUserId()
             let result: [Store] = try await SupabaseManager.shared
@@ -307,8 +317,9 @@ struct StatsView: View {
                 .eq("owner_id", value: ownerId.uuidString)
                 .execute()
                 .value
+            guard storesRequest.isCurrent(requestID) else { return }
             stores = result.map { StoreOption(id: $0.id, name: $0.name) }
-            if selectedStoreId == nil {
+            if selectedStoreId == nil || !stores.contains(where: { $0.id == selectedStoreId }) {
                 selectedStoreId = stores.first?.id
             }
             self.lastStoresLoadedAt = now
@@ -316,6 +327,7 @@ struct StatsView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard storesRequest.isCurrent(requestID) else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -323,7 +335,12 @@ struct StatsView: View {
 
     @MainActor
     private func loadMonth(force: Bool) async {
-        guard let storeId = selectedStoreId else { return }
+        guard let storeId = selectedStoreId else {
+            monthRequest.invalidate()
+            summaries = []
+            selectedDate = nil
+            return
+        }
         #if canImport(Supabase)
         let now = Date()
         let key = "\(storeId.uuidString)|\(monthKey(currentMonth))"
@@ -333,8 +350,13 @@ struct StatsView: View {
            now.timeIntervalSince(lastMonthLoadedAt) < cacheTTLSeconds {
             return
         }
+        let requestID = monthRequest.begin()
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if monthRequest.isCurrent(requestID) {
+                isLoading = false
+            }
+        }
         do {
             let start = calendar.date(from: calendar.dateComponents([.year, .month], from: currentMonth)) ?? currentMonth
             let end = calendar.date(byAdding: .month, value: 1, to: start) ?? start
@@ -344,13 +366,16 @@ struct StatsView: View {
             let rows: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,check_in_at,check_out_at,status,worker_id,workers(name,hourly_wage)")
+                .select("id,check_in_at,check_out_at,status,worker_id,applied_hourly_wage,applied_night_allowance,workers(name,hourly_wage,apply_night_allowance)")
                 .eq("store_id", value: storeId.uuidString)
                 .gte("check_in_at", value: startISO)
                 .lt("check_in_at", value: endISO)
                 .execute()
                 .value
 
+            guard monthRequest.isCurrent(requestID),
+                  selectedStoreId == storeId,
+                  "\(storeId.uuidString)|\(monthKey(currentMonth))" == key else { return }
             summaries = buildSummaries(from: rows)
             if selectedDate == nil ||
                 selectedDate.map({ !calendar.isDate($0, equalTo: currentMonth, toGranularity: .month) }) == true {
@@ -362,6 +387,9 @@ struct StatsView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard monthRequest.isCurrent(requestID),
+                  selectedStoreId == storeId,
+                  "\(storeId.uuidString)|\(monthKey(currentMonth))" == key else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -393,7 +421,14 @@ struct StatsView: View {
             let minutes = calcMinutes(checkIn: checkIn, checkOut: checkOut)
             let name = row.workers?.name ?? "알바"
             let wage = row.workers?.hourly_wage ?? 0
-            let pay = Double(minutes) / 60.0 * wage
+            let pay = PayrollCalculator.grossPay(
+                checkIn: checkIn,
+                checkOut: checkOut,
+                appliedHourlyWage: row.applied_hourly_wage,
+                appliedNightAllowance: row.applied_night_allowance,
+                fallbackHourlyWage: wage,
+                fallbackNightAllowance: row.workers?.apply_night_allowance ?? false
+            )
 
             let day = calendar.startOfDay(for: checkIn)
             byDay[day, default: []].append(WorkRow(id: row.id, name: name, minutes: minutes, pay: pay))

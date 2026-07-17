@@ -10,6 +10,7 @@ struct MyHistoryView: View {
         let hourly_wage: Double?
         let apply_weekly_allowance: Bool?
         let deduction_type: String?
+        let apply_night_allowance: Bool?
         let stores: StoreName?
     }
 
@@ -25,6 +26,8 @@ struct MyHistoryView: View {
         let check_in_at: String
         let check_out_at: String?
         let status: String?
+        let applied_hourly_wage: Double?
+        let applied_night_allowance: Bool?
     }
 
     struct WorkItem: Identifiable {
@@ -47,6 +50,7 @@ struct MyHistoryView: View {
     @State private var isUserRefreshing = false
     @State private var loadError: String?
     @State private var lastLoadedAt: Date?
+    @State private var loadRequest = LatestRequest()
     private let cacheTTLSeconds: TimeInterval = 120
 
     var body: some View {
@@ -179,8 +183,13 @@ struct MyHistoryView: View {
            now.timeIntervalSince(lastLoadedAt) < cacheTTLSeconds {
             return
         }
+        let requestID = loadRequest.begin()
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if loadRequest.isCurrent(requestID) {
+                isLoading = false
+            }
+        }
         do {
             let userId = try await SupabaseManager.shared.currentUserId()
             do {
@@ -198,13 +207,21 @@ struct MyHistoryView: View {
                 workers = try await SupabaseManager.shared
                     .client
                     .from("workers")
-                    .select("id,store_id,hourly_wage,apply_weekly_allowance,deduction_type,stores(name,is_personal)")
+                    .select("id,store_id,hourly_wage,apply_weekly_allowance,deduction_type,apply_night_allowance,stores(name,is_personal)")
                     .eq("user_id", value: userId.uuidString)
                     .execute()
                     .value
             } catch {
                 let message = error.localizedDescription.lowercased()
-                if message.contains("apply_weekly_allowance") || message.contains("deduction_type") {
+                if message.contains("apply_night_allowance") {
+                    workers = try await SupabaseManager.shared
+                        .client
+                        .from("workers")
+                        .select("id,store_id,hourly_wage,apply_weekly_allowance,deduction_type,stores(name,is_personal)")
+                        .eq("user_id", value: userId.uuidString)
+                        .execute()
+                        .value
+                } else if message.contains("apply_weekly_allowance") || message.contains("deduction_type") {
                     workers = try await SupabaseManager.shared
                         .client
                         .from("workers")
@@ -221,6 +238,7 @@ struct MyHistoryView: View {
             let workerIds = workers.map { $0.id.uuidString }
 
             if workerIds.isEmpty {
+                guard loadRequest.isCurrent(requestID) else { return }
                 items = []
                 monthWorkedText = "0시간"
                 monthPayText = "0원"
@@ -237,7 +255,7 @@ struct MyHistoryView: View {
             let logs: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,store_id,worker_id,check_in_at,check_out_at,status")
+                .select("id,store_id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
                 .in("worker_id", values: workerIds)
                 .gte("check_in_at", value: iso.string(from: monthStart))
                 .lt("check_in_at", value: iso.string(from: monthEnd))
@@ -267,7 +285,14 @@ struct MyHistoryView: View {
 
                 let worker = workerById[log.worker_id]
                 let wage = worker?.hourly_wage ?? 0
-                let pay = Double(minutes) / 60.0 * wage
+                let pay = PayrollCalculator.grossPay(
+                    checkIn: checkIn,
+                    checkOut: checkOut,
+                    appliedHourlyWage: log.applied_hourly_wage,
+                    appliedNightAllowance: log.applied_night_allowance,
+                    fallbackHourlyWage: wage,
+                    fallbackNightAllowance: applyNightAllowance(for: worker)
+                )
                 totalPay += pay
             }
 
@@ -277,12 +302,18 @@ struct MyHistoryView: View {
             for (workerId, wLogs) in grouped {
                 guard let worker = workerById[workerId] else { continue }
                 let wage = worker.hourly_wage ?? 0
-                let minutes = wLogs.reduce(0) { partial, log in
+                let gross = wLogs.reduce(0) { partial, log in
                     let checkIn = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
                     let checkOut = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
-                    return partial + Self.calcMinutes(checkIn: checkIn, checkOut: checkOut)
+                    return partial + PayrollCalculator.grossPay(
+                        checkIn: checkIn,
+                        checkOut: checkOut,
+                        appliedHourlyWage: log.applied_hourly_wage,
+                        appliedNightAllowance: log.applied_night_allowance,
+                        fallbackHourlyWage: wage,
+                        fallbackNightAllowance: applyNightAllowance(for: worker)
+                    )
                 }
-                let gross = Double(minutes) / 60.0 * wage
                 var applyWeekly = worker.apply_weekly_allowance ?? false
                 var deductionType = PayrollDeductionType(rawValue: worker.deduction_type ?? "") ?? .withholding
                 if worker.stores?.is_personal == true,
@@ -307,7 +338,14 @@ struct MyHistoryView: View {
                 let worker = workerById[log.worker_id]
                 let wage = worker?.hourly_wage ?? 0
                 let storeName = worker?.stores?.name ?? "매장"
-                let pay = Double(minutes) / 60.0 * wage
+                let pay = PayrollCalculator.grossPay(
+                    checkIn: checkIn,
+                    checkOut: checkOut,
+                    appliedHourlyWage: log.applied_hourly_wage,
+                    appliedNightAllowance: log.applied_night_allowance,
+                    fallbackHourlyWage: wage,
+                    fallbackNightAllowance: applyNightAllowance(for: worker)
+                )
 
                 let start = timeFormatter.string(from: checkIn)
                 let end = checkOut.map { timeFormatter.string(from: $0) } ?? "--:--"
@@ -330,6 +368,7 @@ struct MyHistoryView: View {
                 )
             }
 
+            guard loadRequest.isCurrent(requestID) else { return }
             monthWorkedText = formatHours(totalMinutes)
             monthPayText = formatWon(totalPay)
             monthNetPayText = formatWon(netTotal)
@@ -339,6 +378,7 @@ struct MyHistoryView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard loadRequest.isCurrent(requestID) else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -348,6 +388,15 @@ struct MyHistoryView: View {
         guard let end = checkOut else { return 0 }
         let minutes = floor(end.timeIntervalSince(checkIn) / 60.0)
         return max(0, Int(minutes))
+    }
+
+    private func applyNightAllowance(for worker: WorkerRow?) -> Bool {
+        guard let worker else { return false }
+        if worker.stores?.is_personal == true,
+           let local = PayrollLocalSettingsStore.load(workerId: worker.id) {
+            return local.applyNightAllowance
+        }
+        return worker.apply_night_allowance ?? false
     }
 
 

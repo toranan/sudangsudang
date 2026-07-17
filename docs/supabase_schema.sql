@@ -119,9 +119,50 @@ CREATE TABLE public.work_logs (
     status TEXT CHECK (status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
     approved_by UUID REFERENCES public.profiles(id),
     approved_at TIMESTAMPTZ,
+    applied_hourly_wage NUMERIC NOT NULL CHECK (applied_hourly_wage >= 0),
+    applied_night_allowance BOOLEAN NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Freeze the wage terms that applied when each work log was created.
+CREATE OR REPLACE FUNCTION public.set_work_log_payroll_snapshot()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    IF TG_OP = 'UPDATE'
+       AND NEW.worker_id IS NOT DISTINCT FROM OLD.worker_id
+       AND NEW.store_id IS NOT DISTINCT FROM OLD.store_id THEN
+        NEW.applied_hourly_wage := OLD.applied_hourly_wage;
+        NEW.applied_night_allowance := OLD.applied_night_allowance;
+        RETURN NEW;
+    END IF;
+
+    SELECT
+        GREATEST(COALESCE(w.hourly_wage, 0), 0),
+        COALESCE(w.apply_night_allowance, FALSE)
+    INTO
+        NEW.applied_hourly_wage,
+        NEW.applied_night_allowance
+    FROM public.workers AS w
+    WHERE w.id = NEW.worker_id
+      AND w.store_id = NEW.store_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'worker does not belong to the selected store';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER set_work_log_payroll_snapshot_trigger
+BEFORE INSERT OR UPDATE ON public.work_logs
+FOR EACH ROW
+EXECUTE FUNCTION public.set_work_log_payroll_snapshot();
 
 -- Keep temporal integrity for attendance records.
 ALTER TABLE public.work_logs

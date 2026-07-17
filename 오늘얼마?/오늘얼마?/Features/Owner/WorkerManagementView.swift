@@ -41,6 +41,8 @@ struct WorkerManagementView: View {
         let check_in_at: String
         let check_out_at: String?
         let status: String?
+        let applied_hourly_wage: Double?
+        let applied_night_allowance: Bool?
     }
 
     enum DetailTab: String, CaseIterable, Identifiable {
@@ -80,6 +82,8 @@ struct WorkerManagementView: View {
     @State private var lastStoresLoadedAt: Date?
     @State private var lastWorkersLoadedAt: Date?
     @State private var lastWorkersKey: String?
+    @State private var storesRequest = LatestRequest()
+    @State private var workersRequest = LatestRequest()
     private let cacheTTLSeconds: TimeInterval = 120
 
     var body: some View {
@@ -351,6 +355,7 @@ struct WorkerManagementView: View {
            now.timeIntervalSince(lastStoresLoadedAt) < cacheTTLSeconds {
             return
         }
+        let requestID = storesRequest.begin()
         do {
             let ownerId = try await SupabaseManager.shared.currentUserId()
             let result: [Store] = try await SupabaseManager.shared
@@ -360,8 +365,9 @@ struct WorkerManagementView: View {
                 .eq("owner_id", value: ownerId.uuidString)
                 .execute()
                 .value
+            guard storesRequest.isCurrent(requestID) else { return }
             stores = result.map { StoreOption(id: $0.id, name: $0.name) }
-            if selectedStoreId == nil {
+            if selectedStoreId == nil || !stores.contains(where: { $0.id == selectedStoreId }) {
                 selectedStoreId = stores.first?.id
             }
             self.lastStoresLoadedAt = now
@@ -369,6 +375,7 @@ struct WorkerManagementView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard storesRequest.isCurrent(requestID) else { return }
             inviteError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -377,6 +384,7 @@ struct WorkerManagementView: View {
     @MainActor
     private func loadWorkers(force: Bool) async {
         guard let storeId = selectedStoreId else {
+            workersRequest.invalidate()
             workers = []
             evaluationByWorker = [:]
             return
@@ -390,9 +398,15 @@ struct WorkerManagementView: View {
            now.timeIntervalSince(lastWorkersLoadedAt) < cacheTTLSeconds {
             return
         }
+        let requestID = workersRequest.begin()
+        let requestedMonth = selectedMonth
         isLoadingWorkers = true
         workersError = nil
-        defer { isLoadingWorkers = false }
+        defer {
+            if workersRequest.isCurrent(requestID) {
+                isLoadingWorkers = false
+            }
+        }
         do {
             do {
                 try await WorkerAutoRetirement.processForStore(storeId: storeId)
@@ -415,9 +429,10 @@ struct WorkerManagementView: View {
                     .execute()
                     .value
                 let activeRows = rows.filter { $0.is_active ?? true }
+                guard isCurrentWorkersRequest(requestID, key: key) else { return }
                 workers = activeRows
-                await loadMonthlyLogs(storeId: storeId, workers: activeRows)
-                await loadWorkerEvaluations(storeId: storeId, workers: activeRows)
+                await loadMonthlyLogs(storeId: storeId, workers: activeRows, month: requestedMonth, requestID: requestID, key: key)
+                await loadWorkerEvaluations(storeId: storeId, workers: activeRows, requestID: requestID, key: key)
             } catch {
                 // Safety net: if DB migration is not applied yet, re-fetch without the new columns.
                 let message = error.localizedDescription.lowercased()
@@ -431,9 +446,10 @@ struct WorkerManagementView: View {
                         .execute()
                         .value
                     let activeRows = rows.filter { $0.is_active ?? true }
+                    guard isCurrentWorkersRequest(requestID, key: key) else { return }
                     workers = activeRows
-                    await loadMonthlyLogs(storeId: storeId, workers: activeRows)
-                    await loadWorkerEvaluations(storeId: storeId, workers: activeRows)
+                    await loadMonthlyLogs(storeId: storeId, workers: activeRows, month: requestedMonth, requestID: requestID, key: key)
+                    await loadWorkerEvaluations(storeId: storeId, workers: activeRows, requestID: requestID, key: key)
                 } else if message.contains("apply_weekly_allowance") || message.contains("deduction_type") {
                     let rows: [WorkerRow] = try await SupabaseManager.shared
                         .client
@@ -444,19 +460,22 @@ struct WorkerManagementView: View {
                         .execute()
                         .value
                     let activeRows = rows.filter { $0.is_active ?? true }
+                    guard isCurrentWorkersRequest(requestID, key: key) else { return }
                     workers = activeRows
-                    await loadMonthlyLogs(storeId: storeId, workers: activeRows)
-                    await loadWorkerEvaluations(storeId: storeId, workers: activeRows)
+                    await loadMonthlyLogs(storeId: storeId, workers: activeRows, month: requestedMonth, requestID: requestID, key: key)
+                    await loadWorkerEvaluations(storeId: storeId, workers: activeRows, requestID: requestID, key: key)
                 } else {
                     throw error
                 }
             }
+            guard isCurrentWorkersRequest(requestID, key: key) else { return }
             self.lastWorkersLoadedAt = now
             self.lastWorkersKey = key
         } catch {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard isCurrentWorkersRequest(requestID, key: key) else { return }
             workersError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -465,6 +484,12 @@ struct WorkerManagementView: View {
     private func monthKey(_ date: Date) -> String {
         let comps = AppTime.calendar.dateComponents([.year, .month], from: date)
         return "\(comps.year ?? 0)-\(comps.month ?? 0)"
+    }
+
+    private func isCurrentWorkersRequest(_ requestID: UUID, key: String) -> Bool {
+        guard let storeId = selectedStoreId else { return false }
+        let currentKey = "\(storeId.uuidString)|\(monthKey(selectedMonth))"
+        return workersRequest.isCurrent(requestID) && currentKey == key
     }
 
     @MainActor
@@ -488,18 +513,24 @@ struct WorkerManagementView: View {
     }
 
     @MainActor
-    private func loadMonthlyLogs(storeId: UUID, workers: [WorkerRow]) async {
+    private func loadMonthlyLogs(
+        storeId: UUID,
+        workers: [WorkerRow],
+        month: Date,
+        requestID: UUID,
+        key: String
+    ) async {
         #if canImport(Supabase)
         do {
             let calendar = AppTime.calendar
-            let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth)) ?? Date()
+            let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
             let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? Date()
             let iso = AppTime.iso
 
             let rows: [WorkLogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,worker_id,check_in_at,check_out_at,status")
+                .select("id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
                 .eq("store_id", value: storeId.uuidString)
                 .gte("check_in_at", value: iso.string(from: monthStart))
                 .lt("check_in_at", value: iso.string(from: monthEnd))
@@ -515,14 +546,27 @@ struct WorkerManagementView: View {
             var minutesByWorker: [UUID: Int] = [:]
             for worker in workers {
                 let wage = worker.hourly_wage ?? 0
+                let applyNightAllowance = worker.apply_night_allowance ?? false
                 let logs = byWorker[worker.id] ?? []
-                let minutes = logs.reduce(0) { partial, log in
-                    partial + calcMinutes(checkIn: log.check_in_at, checkOut: log.check_out_at)
+                var minutes = 0
+                var pay: Double = 0
+                for log in logs {
+                    let dates = parseWorkLogDates(checkIn: log.check_in_at, checkOut: log.check_out_at)
+                    minutes += PayrollCalculator.calcMinutes(checkIn: dates.start, checkOut: dates.end)
+                    pay += PayrollCalculator.grossPay(
+                        checkIn: dates.start,
+                        checkOut: dates.end,
+                        appliedHourlyWage: log.applied_hourly_wage,
+                        appliedNightAllowance: log.applied_night_allowance,
+                        fallbackHourlyWage: wage,
+                        fallbackNightAllowance: applyNightAllowance
+                    )
                 }
-                payByWorker[worker.id] = calcPay(minutes: minutes, wage: wage)
+                payByWorker[worker.id] = pay
                 minutesByWorker[worker.id] = minutes
             }
 
+            guard isCurrentWorkersRequest(requestID, key: key) else { return }
             monthLogsByWorker = byWorker
             monthPayByWorker = payByWorker
             monthMinutesByWorker = minutesByWorker
@@ -530,15 +574,22 @@ struct WorkerManagementView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard isCurrentWorkersRequest(requestID, key: key) else { return }
             workersError = AppErrorMessage.userMessage(error)
         }
         #endif
     }
 
     @MainActor
-    private func loadWorkerEvaluations(storeId: UUID, workers: [WorkerRow]) async {
+    private func loadWorkerEvaluations(
+        storeId: UUID,
+        workers: [WorkerRow],
+        requestID: UUID,
+        key: String
+    ) async {
         #if canImport(Supabase)
         guard !workers.isEmpty else {
+            guard isCurrentWorkersRequest(requestID, key: key) else { return }
             evaluationByWorker = [:]
             return
         }
@@ -595,6 +646,7 @@ struct WorkerManagementView: View {
 
             let allWorkerIds = Array(Set(workerIdsByPerson.values.flatMap { $0 }))
             if allWorkerIds.isEmpty {
+                guard isCurrentWorkersRequest(requestID, key: key) else { return }
                 evaluationByWorker = Dictionary(uniqueKeysWithValues: workers.map { worker in
                     let key = selectedPersonByWorker[worker.id] ?? worker.id.uuidString
                     let joinedAt = earliestJoinedByPerson[key] ?? parseJoinedAt(worker.joined_at) ?? Date()
@@ -639,6 +691,7 @@ struct WorkerManagementView: View {
             } catch {
                 let message = error.localizedDescription.lowercased()
                 if message.contains("schedule_entries") {
+                    guard isCurrentWorkersRequest(requestID, key: key) else { return }
                     evaluationByWorker = Dictionary(uniqueKeysWithValues: workers.map { worker in
                         let key = selectedPersonByWorker[worker.id] ?? worker.id.uuidString
                         let joinedAt = earliestJoinedByPerson[key] ?? parseJoinedAt(worker.joined_at) ?? Date()
@@ -670,6 +723,7 @@ struct WorkerManagementView: View {
             } catch {
                 let message = error.localizedDescription.lowercased()
                 if message.contains("worker_owner_ratings") {
+                    guard isCurrentWorkersRequest(requestID, key: key) else { return }
                     evaluationByWorker = Dictionary(uniqueKeysWithValues: workers.map { worker in
                         let key = selectedPersonByWorker[worker.id] ?? worker.id.uuidString
                         let joinedAt = earliestJoinedByPerson[key] ?? parseJoinedAt(worker.joined_at) ?? Date()
@@ -718,6 +772,7 @@ struct WorkerManagementView: View {
                     )
                     onlyRatings[worker.id] = summary
                 }
+                guard isCurrentWorkersRequest(requestID, key: key) else { return }
                 evaluationByWorker = onlyRatings.mapValues { EvaluationSummary(value: $0) }
                 return
             }
@@ -798,11 +853,13 @@ struct WorkerManagementView: View {
                 )
             }
 
+            guard isCurrentWorkersRequest(requestID, key: key) else { return }
             evaluationByWorker = summaries.mapValues { EvaluationSummary(value: $0) }
         } catch {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard isCurrentWorkersRequest(requestID, key: key) else { return }
             evaluationByWorker = Dictionary(uniqueKeysWithValues: workers.map { worker in
                 let summary = buildSummary(
                     joinedAt: parseJoinedAt(worker.joined_at) ?? Date(),
@@ -914,13 +971,17 @@ struct WorkerManagementView: View {
     }
 
     // Helper calculation functions need to be available for parent logic too
-    private func calcMinutes(checkIn: String, checkOut: String?) -> Int {
+    private func parseWorkLogDates(checkIn: String, checkOut: String?) -> (start: Date, end: Date?) {
         let parser = AppTime.isoWithFractionalSeconds
         let iso = AppTime.iso
         let start = parser.date(from: checkIn) ?? iso.date(from: checkIn) ?? Date()
-        let end = checkOut.flatMap { parser.date(from: $0) ?? iso.date(from: $0) } ?? Date()
-        let minutes = floor(end.timeIntervalSince(start) / 60.0)
-        return max(0, Int(minutes))
+        let end = checkOut.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
+        return (start, end)
+    }
+
+    private func calcMinutes(checkIn: String, checkOut: String?) -> Int {
+        let dates = parseWorkLogDates(checkIn: checkIn, checkOut: checkOut)
+        return PayrollCalculator.calcMinutes(checkIn: dates.start, checkOut: dates.end ?? Date())
     }
 
     private func calcPay(minutes: Int, wage: Double) -> Double {
@@ -1333,7 +1394,7 @@ struct WorkerDetailSheet: View {
 
     private var netView: some View {
         let wage = effectiveHourlyWage()
-        let gross = monthPay
+        let gross = monthGrossPay(wage: wage)
         let weeklyAllowance = applyWeeklyAllowance ? estimateWeeklyAllowancePay(wage: wage) : 0
         let grossWithAllowance = gross + weeklyAllowance
         let breakdown = PayrollCalculator.deductionBreakdown(gross: grossWithAllowance, type: deductionType)
@@ -1393,7 +1454,7 @@ struct WorkerDetailSheet: View {
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundColor(.appTextSecondary)
                 HStack(alignment: .bottom) {
-                    Text(formatWon(monthPay))
+                    Text(formatWon(monthGrossPay(wage: effectiveHourlyWage())))
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundColor(.appTextPrimary)
                     Spacer()
@@ -1445,7 +1506,7 @@ struct WorkerDetailSheet: View {
                                     .font(.system(size: 12, weight: .medium, design: .rounded))
                                     .foregroundColor(.appTextSecondary)
                                 Spacer()
-                                Text(formatWon(calcPay(minutes: calcMinutes(checkIn: log.check_in_at, checkOut: log.check_out_at), wage: worker.hourly_wage ?? 0)))
+                                Text(formatWon(logGrossPay(log, wage: effectiveHourlyWage())))
                                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                             }
                         }
@@ -1952,7 +2013,7 @@ struct WorkerDetailSheet: View {
         let parser = AppTime.isoWithFractionalSeconds
         let iso = AppTime.iso
         let end = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) } ?? Date()
-        var checkIn = end.addingTimeInterval(TimeInterval(-totalMinutes * 60))
+        let checkIn = end.addingTimeInterval(TimeInterval(-totalMinutes * 60))
 
         do {
             struct UpdatePayload: Encodable {
@@ -2037,6 +2098,32 @@ struct WorkerDetailSheet: View {
 
     private func calcPay(minutes: Int, wage: Double) -> Double {
         Double(minutes) / 60.0 * wage
+    }
+
+    private func monthGrossPay(wage: Double) -> Double {
+        monthLogs.reduce(0) { partial, log in
+            partial + logGrossPay(log, wage: wage)
+        }
+    }
+
+    private func logGrossPay(_ log: WorkerManagementView.WorkLogRow, wage: Double) -> Double {
+        let dates = parseWorkLogDates(checkIn: log.check_in_at, checkOut: log.check_out_at)
+        return PayrollCalculator.grossPay(
+            checkIn: dates.start,
+            checkOut: dates.end,
+            appliedHourlyWage: log.applied_hourly_wage,
+            appliedNightAllowance: log.applied_night_allowance,
+            fallbackHourlyWage: wage,
+            fallbackNightAllowance: applyNightAllowance
+        )
+    }
+
+    private func parseWorkLogDates(checkIn: String, checkOut: String?) -> (start: Date, end: Date?) {
+        let parser = AppTime.isoWithFractionalSeconds
+        let iso = AppTime.iso
+        let start = parser.date(from: checkIn) ?? iso.date(from: checkIn) ?? Date()
+        let end = checkOut.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
+        return (start, end)
     }
 
     private func effectiveHourlyWage() -> Double {

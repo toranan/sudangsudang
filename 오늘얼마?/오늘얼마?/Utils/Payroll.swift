@@ -86,6 +86,37 @@ enum PayrollCalculator {
         return max(0, Int(floor(total / 60.0)))
     }
 
+    static func grossPay(
+        checkIn: Date,
+        checkOut: Date?,
+        wage: Double,
+        applyNightAllowance: Bool
+    ) -> Double {
+        let minutes = calcMinutes(checkIn: checkIn, checkOut: checkOut)
+        let basePay = Double(minutes) / 60.0 * wage
+        guard applyNightAllowance else { return basePay }
+
+        let nightMinutes = calcNightMinutes(checkIn: checkIn, checkOut: checkOut)
+        let nightPremium = Double(nightMinutes) / 60.0 * wage * nightPremiumRate
+        return basePay + nightPremium
+    }
+
+    static func grossPay(
+        checkIn: Date,
+        checkOut: Date?,
+        appliedHourlyWage: Double?,
+        appliedNightAllowance: Bool?,
+        fallbackHourlyWage: Double,
+        fallbackNightAllowance: Bool
+    ) -> Double {
+        grossPay(
+            checkIn: checkIn,
+            checkOut: checkOut,
+            wage: appliedHourlyWage ?? fallbackHourlyWage,
+            applyNightAllowance: appliedNightAllowance ?? fallbackNightAllowance
+        )
+    }
+
     private static func overlapSeconds(startA: Date, endA: Date, startB: Date, endB: Date) -> Double {
         let start = max(startA, startB)
         let end = min(endA, endB)

@@ -30,6 +30,8 @@ struct StoreHomeView: View {
     @State private var lastStoresLoadedAt: Date?
     @State private var lastSummaryLoadedAt: Date?
     @State private var lastSummaryStoreId: UUID?
+    @State private var latestStoresRequestID: UUID?
+    @State private var latestSummaryRequestID: UUID?
     private let cacheTTLSeconds: TimeInterval = 120
     
     var body: some View {
@@ -308,6 +310,9 @@ struct StoreHomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
             Task { await refresh(force: false) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .payrollSettingsDidChange)) { _ in
+            Task { await refresh(force: true) }
+        }
     }
 
     private var selectedStoreName: String {
@@ -488,8 +493,14 @@ struct StoreHomeView: View {
            now.timeIntervalSince(lastStoresLoadedAt) < cacheTTLSeconds {
             return
         }
+        let requestID = UUID()
+        latestStoresRequestID = requestID
         isLoadingStores = true
-        defer { isLoadingStores = false }
+        defer {
+            if latestStoresRequestID == requestID {
+                isLoadingStores = false
+            }
+        }
         do {
             let ownerId = try await SupabaseManager.shared.currentUserId()
             let result: [Store] = try await SupabaseManager.shared
@@ -499,8 +510,9 @@ struct StoreHomeView: View {
                 .eq("owner_id", value: ownerId.uuidString)
                 .execute()
                 .value
+            guard latestStoresRequestID == requestID else { return }
             stores = result
-            if selectedStoreId == nil {
+            if selectedStoreId == nil || !stores.contains(where: { $0.id == selectedStoreId }) {
                 selectedStoreId = stores.first?.id
             }
             self.lastStoresLoadedAt = now
@@ -508,6 +520,7 @@ struct StoreHomeView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard latestStoresRequestID == requestID else { return }
             storeError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -519,11 +532,14 @@ struct StoreHomeView: View {
         let check_out_at: String?
         let status: String?
         let workers: WorkerInfo?
+        let applied_hourly_wage: Double?
+        let applied_night_allowance: Bool?
     }
 
     struct WorkerInfo: Decodable {
         let name: String
         let hourly_wage: Double?
+        let apply_night_allowance: Bool?
     }
 
     @MainActor
@@ -538,8 +554,14 @@ struct StoreHomeView: View {
            now.timeIntervalSince(lastSummaryLoadedAt) < cacheTTLSeconds {
             return
         }
+        let requestID = UUID()
+        latestSummaryRequestID = requestID
         isLoadingSummary = true
-        defer { isLoadingSummary = false }
+        defer {
+            if latestSummaryRequestID == requestID {
+                isLoadingSummary = false
+            }
+        }
         do {
             let calendar = AppTime.calendar
             let start = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
@@ -548,12 +570,13 @@ struct StoreHomeView: View {
             let rows: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("worker_id,check_in_at,check_out_at,status,workers(name,hourly_wage)")
+                .select("worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance,workers(name,hourly_wage,apply_night_allowance)")
                 .eq("store_id", value: storeId.uuidString)
                 .gte("check_in_at", value: iso.string(from: start))
                 .lt("check_in_at", value: iso.string(from: end))
                 .execute()
                 .value
+            guard latestSummaryRequestID == requestID, selectedStoreId == storeId else { return }
 
             var minutes = 0
             var pay: Double = 0
@@ -584,7 +607,14 @@ struct StoreHomeView: View {
                 let durationMinutes = calcMinutes(checkIn: checkIn, checkOut: effectiveCheckOut)
                 minutes += durationMinutes
                 let wage = row.workers?.hourly_wage ?? 0
-                pay += Double(durationMinutes) / 60.0 * wage
+                pay += PayrollCalculator.grossPay(
+                    checkIn: checkIn,
+                    checkOut: effectiveCheckOut,
+                    appliedHourlyWage: row.applied_hourly_wage,
+                    appliedNightAllowance: row.applied_night_allowance,
+                    fallbackHourlyWage: wage,
+                    fallbackNightAllowance: row.workers?.apply_night_allowance ?? false
+                )
             }
             let workingNames = latestRowByWorker.values
                 .filter { $0.isOpen }
@@ -601,6 +631,7 @@ struct StoreHomeView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard latestSummaryRequestID == requestID, selectedStoreId == storeId else { return }
             storeError = AppErrorMessage.userMessage(error)
         }
         #endif

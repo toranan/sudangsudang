@@ -33,6 +33,8 @@ struct ApprovalView: View {
     @State private var lastStoresLoadedAt: Date?
     @State private var lastLogsLoadedAt: Date?
     @State private var lastLogsStoreId: UUID?
+    @State private var storesRequest = LatestRequest()
+    @State private var logsRequest = LatestRequest()
     private let cacheTTLSeconds: TimeInterval = 120
 
     var body: some View {
@@ -199,6 +201,7 @@ struct ApprovalView: View {
            now.timeIntervalSince(lastStoresLoadedAt) < cacheTTLSeconds {
             return
         }
+        let requestID = storesRequest.begin()
         do {
             let ownerId = try await SupabaseManager.shared.currentUserId()
             let result: [Store] = try await SupabaseManager.shared
@@ -208,8 +211,9 @@ struct ApprovalView: View {
                 .eq("owner_id", value: ownerId.uuidString)
                 .execute()
                 .value
+            guard storesRequest.isCurrent(requestID) else { return }
             stores = result.map { StoreOption(id: $0.id, name: $0.name) }
-            if selectedStoreId == nil {
+            if selectedStoreId == nil || !stores.contains(where: { $0.id == selectedStoreId }) {
                 selectedStoreId = stores.first?.id
             }
             self.lastStoresLoadedAt = now
@@ -217,6 +221,7 @@ struct ApprovalView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard storesRequest.isCurrent(requestID) else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -225,6 +230,7 @@ struct ApprovalView: View {
     @MainActor
     private func loadLogs(force: Bool) async {
         guard let storeId = selectedStoreId else {
+            logsRequest.invalidate()
             pending = []
             recent = []
             return
@@ -238,9 +244,14 @@ struct ApprovalView: View {
            now.timeIntervalSince(lastLogsLoadedAt) < cacheTTLSeconds {
             return
         }
+        let requestID = logsRequest.begin()
         isLoading = true
         loadError = nil
-        defer { isLoading = false }
+        defer {
+            if logsRequest.isCurrent(requestID) {
+                isLoading = false
+            }
+        }
         do {
             let rows: [LogRow] = try await SupabaseManager.shared
                 .client
@@ -251,6 +262,7 @@ struct ApprovalView: View {
                 .execute()
                 .value
 
+            guard logsRequest.isCurrent(requestID), selectedStoreId == storeId else { return }
             pending = rows.filter { normalizedStatus($0.status) == "pending" }
             recent = rows.filter {
                 let status = normalizedStatus($0.status)
@@ -262,6 +274,7 @@ struct ApprovalView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard logsRequest.isCurrent(requestID), selectedStoreId == storeId else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -300,6 +313,7 @@ struct ApprovalView: View {
                 .eq("id", value: item.id.uuidString)
                 .execute()
             Haptics.success()
+            NotificationCenter.default.post(name: .payrollSettingsDidChange, object: nil)
             await loadLogs(force: true)
         } catch {
             Haptics.error()

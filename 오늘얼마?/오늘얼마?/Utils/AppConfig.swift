@@ -35,8 +35,19 @@ enum AppErrorMessage {
 
     static func userMessage(
         _ error: Error,
-        fallback: String = "문제가 발생했어요. 잠시 후 다시 시도해주세요."
+        fallback: String = "문제가 발생했어요. 잠시 후 다시 시도해주세요.",
+        file: StaticString = #fileID,
+        line: UInt = #line
     ) -> String {
+        #if DEBUG
+        let nsError = error as NSError
+        print(
+            "[AppError] \(file):\(line) " +
+            "domain=\(nsError.domain) code=\(nsError.code) " +
+            "description=\(nsError.localizedDescription)"
+        )
+        #endif
+
         if isCancellation(error) {
             return fallback
         }

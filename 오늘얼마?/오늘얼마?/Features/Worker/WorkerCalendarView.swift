@@ -8,12 +8,14 @@ struct WorkerCalendarView: View {
         let id: UUID
         let store_id: UUID
         let hourly_wage: Double?
+        let apply_night_allowance: Bool?
         let is_active: Bool?
         let stores: StoreInfo?
     }
 
     struct StoreInfo: Decodable {
         let name: String
+        let is_personal: Bool?
     }
 
     struct LogRow: Decodable, Identifiable {
@@ -21,6 +23,8 @@ struct WorkerCalendarView: View {
         let check_in_at: String
         let check_out_at: String?
         let status: String?
+        let applied_hourly_wage: Double?
+        let applied_night_allowance: Bool?
     }
 
     struct DaySummary: Identifiable {
@@ -36,6 +40,7 @@ struct WorkerCalendarView: View {
         let start: Date
         let end: Date?
         let minutes: Int
+        let pay: Double
         let status: String
     }
 
@@ -52,6 +57,8 @@ struct WorkerCalendarView: View {
     @State private var lastWorkersLoadedAt: Date?
     @State private var lastMonthLoadedAt: Date?
     @State private var lastMonthKey: String?
+    @State private var workersRequest = LatestRequest()
+    @State private var monthRequest = LatestRequest()
     private let cacheTTLSeconds: TimeInterval = 120
 
     private let calendar = AppTime.calendar
@@ -235,7 +242,7 @@ struct WorkerCalendarView: View {
                         Text(row.statusText)
                             .font(.system(size: 12, weight: .medium, design: .rounded))
                             .foregroundColor(row.statusColor)
-                        Text(formatWon(payFor(minutes: row.minutes)))
+                        Text(row.status == "approved" ? formatWon(row.pay) : "미승인")
                             .font(.system(size: 13, weight: .semibold, design: .rounded))
                             .foregroundColor(.appTextPrimary)
                     }
@@ -256,8 +263,15 @@ struct WorkerCalendarView: View {
         workers.first(where: { $0.id == selectedWorkerId })?.hourly_wage ?? 0
     }
 
-    private func payFor(minutes: Int) -> Double {
-        Double(minutes) / 60.0 * selectedWorkerHourlyWage
+    private var selectedWorkerApplyNightAllowance: Bool {
+        guard let worker = workers.first(where: { $0.id == selectedWorkerId }) else {
+            return false
+        }
+        if worker.stores?.is_personal == true,
+           let local = PayrollLocalSettingsStore.load(workerId: worker.id) {
+            return local.applyNightAllowance
+        }
+        return worker.apply_night_allowance ?? false
     }
 
     private var monthTitle: String {
@@ -332,8 +346,13 @@ struct WorkerCalendarView: View {
            now.timeIntervalSince(lastWorkersLoadedAt) < cacheTTLSeconds {
             return
         }
+        let requestID = workersRequest.begin()
         isLoadingWorkers = true
-        defer { isLoadingWorkers = false }
+        defer {
+            if workersRequest.isCurrent(requestID) {
+                isLoadingWorkers = false
+            }
+        }
         do {
             let userId = try await SupabaseManager.shared.currentUserId()
             do {
@@ -349,11 +368,12 @@ struct WorkerCalendarView: View {
             let rows: [WorkerStoreRow] = try await SupabaseManager.shared
                 .client
                 .from("workers")
-                .select("id,store_id,hourly_wage,is_active,stores(name)")
+                .select("id,store_id,hourly_wage,apply_night_allowance,is_active,stores(name,is_personal)")
                 .eq("user_id", value: userId.uuidString)
                 .order("joined_at", ascending: false)
                 .execute()
                 .value
+            guard workersRequest.isCurrent(requestID) else { return }
             let activeRows = rows.filter { $0.is_active ?? true }
             workers = activeRows
             if selectedWorkerId == nil || !activeRows.contains(where: { $0.id == selectedWorkerId }) {
@@ -364,6 +384,7 @@ struct WorkerCalendarView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard workersRequest.isCurrent(requestID) else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -372,6 +393,7 @@ struct WorkerCalendarView: View {
     @MainActor
     private func loadMonth(force: Bool) async {
         guard let workerId = selectedWorkerId else {
+            monthRequest.invalidate()
             summaries = []
             selectedDate = nil
             return
@@ -385,8 +407,13 @@ struct WorkerCalendarView: View {
            now.timeIntervalSince(lastMonthLoadedAt) < cacheTTLSeconds {
             return
         }
+        let requestID = monthRequest.begin()
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if monthRequest.isCurrent(requestID) {
+                isLoading = false
+            }
+        }
         do {
             loadError = nil
             let start = calendar.date(from: calendar.dateComponents([.year, .month], from: currentMonth)) ?? currentMonth
@@ -397,7 +424,7 @@ struct WorkerCalendarView: View {
             let rows: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,check_in_at,check_out_at,status")
+                .select("id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
                 .eq("worker_id", value: workerId.uuidString)
                 .gte("check_in_at", value: startISO)
                 .lt("check_in_at", value: endISO)
@@ -405,6 +432,9 @@ struct WorkerCalendarView: View {
                 .execute()
                 .value
 
+            guard monthRequest.isCurrent(requestID),
+                  selectedWorkerId == workerId,
+                  "\(workerId.uuidString)|\(monthKey(currentMonth))" == key else { return }
             summaries = buildSummaries(from: rows)
             if selectedDate == nil ||
                 selectedDate.map({ !calendar.isDate($0, equalTo: currentMonth, toGranularity: .month) }) == true {
@@ -416,6 +446,9 @@ struct WorkerCalendarView: View {
             if AppErrorMessage.isCancellation(error) {
                 return
             }
+            guard monthRequest.isCurrent(requestID),
+                  selectedWorkerId == workerId,
+                  "\(workerId.uuidString)|\(monthKey(currentMonth))" == key else { return }
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -432,14 +465,26 @@ struct WorkerCalendarView: View {
             let checkIn = parser.date(from: row.check_in_at) ?? isoFormatter.date(from: row.check_in_at) ?? Date()
             let checkOut = row.check_out_at.flatMap { parser.date(from: $0) ?? isoFormatter.date(from: $0) }
             let minutes = calcMinutes(checkIn: checkIn, checkOut: checkOut)
+            let isApproved = status == "approved" && checkOut != nil
+            let pay = isApproved
+                ? PayrollCalculator.grossPay(
+                    checkIn: checkIn,
+                    checkOut: checkOut,
+                    appliedHourlyWage: row.applied_hourly_wage,
+                    appliedNightAllowance: row.applied_night_allowance,
+                    fallbackHourlyWage: selectedWorkerHourlyWage,
+                    fallbackNightAllowance: selectedWorkerApplyNightAllowance
+                )
+                : 0
 
             let day = calendar.startOfDay(for: checkIn)
-            byDay[day, default: []].append(WorkRow(id: row.id, start: checkIn, end: checkOut, minutes: minutes, status: status))
+            byDay[day, default: []].append(WorkRow(id: row.id, start: checkIn, end: checkOut, minutes: minutes, pay: pay, status: status))
         }
 
         let summaries = byDay.map { (date, rows) -> DaySummary in
-            let totalMinutes = rows.reduce(0) { $0 + $1.minutes }
-            let totalPay = rows.reduce(0) { $0 + payFor(minutes: $1.minutes) }
+            let approvedRows = rows.filter { $0.status == "approved" }
+            let totalMinutes = approvedRows.reduce(0) { $0 + $1.minutes }
+            let totalPay = approvedRows.reduce(0) { $0 + $1.pay }
             return DaySummary(date: date, totalMinutes: totalMinutes, totalPay: totalPay, rows: rows)
         }
 

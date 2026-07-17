@@ -8,7 +8,7 @@ struct WorkerStoreKnowledgeView: View {
     let storeName: String
 
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedPanel: WorkerStoreKnowledgePanel = .notice
+    @State private var selectedPanel: WorkerStoreKnowledgePanel
     @State private var documents: [WorkerStoreDocumentRow] = []
     @State private var viewingDocument: WorkerStoreDocumentRow?
     @State private var isLoading = false
@@ -16,14 +16,28 @@ struct WorkerStoreKnowledgeView: View {
     @State private var chatInput = ""
     @State private var isAsking = false
     @State private var chatMessages: [WorkerStoreChatMessage] = []
+    @FocusState private var isChatInputFocused: Bool
+
+    init(
+        storeId: UUID,
+        storeName: String,
+        initialPanel: WorkerStoreKnowledgePanel = .notice
+    ) {
+        self.storeId = storeId
+        self.storeName = storeName
+        _selectedPanel = State(initialValue: initialPanel)
+    }
 
     var body: some View {
         VStack(spacing: 18) {
             header
-            panelPicker
+
+            if !isChatOnly {
+                panelPicker
+            }
 
             Group {
-                if selectedPanel == .chat {
+                if isChatOnly {
                     chatPanel
                 } else {
                     ScrollView {
@@ -47,6 +61,10 @@ struct WorkerStoreKnowledgeView: View {
         }
     }
 
+    private var isChatOnly: Bool {
+        selectedPanel == .chat
+    }
+
     private var header: some View {
         HStack(spacing: 12) {
             Button(action: { dismiss() }) {
@@ -59,7 +77,7 @@ struct WorkerStoreKnowledgeView: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("가게 소식")
+                Text(isChatOnly ? "챗봇" : "가게 소식")
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundColor(.appTextPrimary)
                 Text(storeName)
@@ -76,7 +94,7 @@ struct WorkerStoreKnowledgeView: View {
 
     private var panelPicker: some View {
         Picker("", selection: $selectedPanel) {
-            ForEach(WorkerStoreKnowledgePanel.allCases) { panel in
+            ForEach(WorkerStoreKnowledgePanel.documentCases) { panel in
                 Text(panel.title).tag(panel)
             }
         }
@@ -145,6 +163,11 @@ struct WorkerStoreKnowledgeView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 18)
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    isChatInputFocused = false
+                }
                 .onChange(of: chatMessages.count) { _ in
                     scrollToLatestMessage(proxy)
                 }
@@ -159,6 +182,7 @@ struct WorkerStoreKnowledgeView: View {
             HStack(spacing: 10) {
                 TextField("메시지 입력", text: $chatInput, axis: .vertical)
                     .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .focused($isChatInputFocused)
                     .lineLimit(1...4)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
@@ -482,10 +506,12 @@ struct WorkerStoreKnowledgeView: View {
     }
 }
 
-private enum WorkerStoreKnowledgePanel: String, CaseIterable, Identifiable {
+enum WorkerStoreKnowledgePanel: String, CaseIterable, Identifiable {
     case notice
     case manual
     case chat
+
+    static let documentCases: [WorkerStoreKnowledgePanel] = [.notice, .manual]
 
     var id: String { rawValue }
 
