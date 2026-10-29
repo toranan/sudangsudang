@@ -53,12 +53,12 @@ struct OwnerWorkerLogsView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+        .appRefreshable {
+            await loadLogs()
+        }
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("근무 내역")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
-            await loadLogs()
-        }
         .task {
             await loadLogs()
         }

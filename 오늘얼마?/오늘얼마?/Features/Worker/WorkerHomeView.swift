@@ -194,10 +194,9 @@ struct WorkerHomeView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
             }
-            .refreshable {
+            .appRefreshable {
                 await refreshFromUser()
             }
-            .refreshStatusOverlay(isVisible: isUserRefreshing)
             .background(Color.appBackground.ignoresSafeArea())
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)

@@ -263,15 +263,15 @@ struct WorkerCheckInView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+        .appRefreshable {
+            await loadCurrentLog()
+            await loadMonthLogsForNet()
+        }
         .background(Color.appBackground.ignoresSafeArea())
         .contentShape(Rectangle())
         .onTapGesture { hideKeyboard() }
         .navigationTitle(store.name)
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
-            await loadCurrentLog()
-            await loadMonthLogsForNet()
-        }
         .task {
             if store.isPersonal {
                 // Personal store defaults: withholding + no night/weekly allowance.
@@ -1299,6 +1299,9 @@ private struct WorkerStoreHistoryView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+        .appRefreshable {
+            await refreshFromUser()
+        }
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("\(storeName) 내역")
         .navigationBarTitleDisplayMode(.inline)
@@ -1306,10 +1309,6 @@ private struct WorkerStoreHistoryView: View {
             loadLocalSettings()
             await loadLogs()
         }
-        .refreshable {
-            await refreshFromUser()
-        }
-        .refreshStatusOverlay(isVisible: isUserRefreshing)
     }
 
     private func loadLocalSettings() {

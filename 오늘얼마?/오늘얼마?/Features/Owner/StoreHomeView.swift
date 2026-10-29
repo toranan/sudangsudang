@@ -144,10 +144,9 @@ struct StoreHomeView: View {
             .padding(.bottom, 40)
             .animation(.easeOut(duration: 0.2), value: pendingCount)
         }
-        .refreshable {
+        .appRefreshable {
             await refreshFromUser()
         }
-        .refreshStatusOverlay(isVisible: isUserRefreshing)
         .background(Color.appBackground.ignoresSafeArea())
         .sheet(isPresented: $isPresentingCreateStore) {
             CreateStoreView { name, address in

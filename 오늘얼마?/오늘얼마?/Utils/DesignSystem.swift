@@ -228,44 +228,71 @@ extension View {
             .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
     }
 
-    func refreshStatusOverlay(isVisible: Bool, text: String = "새로고침 중") -> some View {
-        self.modifier(RefreshStatusOverlayModifier(isVisible: isVisible, text: text))
+    // 살짝(60pt) 당기면 바로 새로고침. ScrollView에 직접 붙인다.
+    func appRefreshable(_ action: @escaping @MainActor () async -> Void) -> some View {
+        self.modifier(PullToRefreshModifier(action: action))
     }
 }
 
-private struct RefreshStatusOverlayModifier: ViewModifier {
-    let isVisible: Bool
-    let text: String
+private struct PullToRefreshModifier: ViewModifier {
+    let action: @MainActor () async -> Void
+
+    @State private var pullDistance: CGFloat = 0
+    @State private var isRefreshing = false
+    @State private var isArmed = true
+    private let threshold: CGFloat = 60
 
     func body(content: Content) -> some View {
         content
-            .overlay(alignment: .top) {
-                if isVisible {
-                    RefreshStatusBadge(text: text)
-                        .padding(.top, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .zIndex(1)
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                -(geometry.contentOffset.y + geometry.contentInsets.top)
+            } action: { _, distance in
+                pullDistance = max(0, distance)
+                // 손을 떼고 제자리로 돌아와야 다음 새로고침을 받는다.
+                if distance <= 4 { isArmed = true }
+                guard isArmed, !isRefreshing, distance >= threshold else { return }
+                isArmed = false
+                isRefreshing = true
+                Haptics.tap()
+                Task { @MainActor in
+                    await action()
+                    isRefreshing = false
                 }
             }
-            .animation(.easeOut(duration: 0.18), value: isVisible)
+            .overlay(alignment: .top) {
+                if isRefreshing || pullDistance > 8 {
+                    RefreshIndicator(
+                        progress: min(1, pullDistance / threshold),
+                        isRefreshing: isRefreshing
+                    )
+                    .padding(.top, 8)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                }
+            }
+            .animation(.easeOut(duration: 0.18), value: isRefreshing)
     }
 }
 
-private struct RefreshStatusBadge: View {
-    let text: String
+private struct RefreshIndicator: View {
+    let progress: CGFloat
+    let isRefreshing: Bool
 
     var body: some View {
-        HStack(spacing: 8) {
-            ProgressView()
-                .controlSize(.small)
-            Text(text)
-                .font(.app(.caption, .semibold))
-                .foregroundColor(.appTextSecondary)
+        Group {
+            if isRefreshing {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(.appAccent)
+            } else {
+                Circle()
+                    .trim(from: 0, to: progress * 0.85)
+                    .stroke(Color.appAccent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.regularMaterial)
-        .clipShape(Capsule())
+        .frame(width: 20, height: 20)
+        .padding(9)
+        .background(.regularMaterial, in: Circle())
     }
 }
 

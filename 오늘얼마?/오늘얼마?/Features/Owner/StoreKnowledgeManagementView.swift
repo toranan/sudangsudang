@@ -39,7 +39,7 @@ struct StoreKnowledgeManagementView: View {
                         documentsPanel
                             .padding(.bottom, 32)
                     }
-                    .refreshable {
+                    .appRefreshable {
                         await loadDocuments()
                     }
                 } else {

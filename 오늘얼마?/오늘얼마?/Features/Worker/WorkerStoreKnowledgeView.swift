@@ -44,7 +44,7 @@ struct WorkerStoreKnowledgeView: View {
                         documentPanel
                             .padding(.bottom, 32)
                     }
-                    .refreshable {
+                    .appRefreshable {
                         await loadDocuments()
                     }
                 }

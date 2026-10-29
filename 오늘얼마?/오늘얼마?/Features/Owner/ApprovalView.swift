@@ -139,10 +139,9 @@ struct ApprovalView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
-        .refreshable {
+        .appRefreshable {
             await refreshFromUser()
         }
-        .refreshStatusOverlay(isVisible: isUserRefreshing)
         .background(Color.appBackground.ignoresSafeArea())
         .task {
             await refresh(force: false)

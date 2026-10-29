@@ -73,12 +73,12 @@ struct OwnerMonthlyDetailView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+        .appRefreshable {
+            await loadAll()
+        }
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("상세")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
-            await loadAll()
-        }
         .task {
             await loadAll()
         }
