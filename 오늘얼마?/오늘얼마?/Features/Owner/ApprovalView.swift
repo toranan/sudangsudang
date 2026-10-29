@@ -3,6 +3,12 @@ import SwiftUI
 import Supabase
 #endif
 
+// 홈의 '승인 기다리는 근무' 배너에서 승인 탭의 특정 근무로 바로 보내기 위한 값.
+struct ApprovalFocus: Equatable {
+    let storeId: UUID
+    let logId: UUID?
+}
+
 struct ApprovalView: View {
     struct StoreOption: Identifiable, Hashable {
         let id: UUID
@@ -23,7 +29,11 @@ struct ApprovalView: View {
         let workers: WorkerInfo?
     }
 
+    @Binding var focus: ApprovalFocus?
+
     @State private var stores: [StoreOption] = []
+    @State private var highlightedLogId: UUID?
+    @State private var isApplyingFocus = false
     @State private var selectedStoreId: UUID?
     @State private var pending: [LogRow] = []
     @State private var recent: [LogRow] = []
@@ -38,40 +48,118 @@ struct ApprovalView: View {
     private let cacheTTLSeconds: TimeInterval = 120
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("근무 승인")
-                        .font(.system(size: 26, weight: .heavy))
-                        .tracking(-0.6)
-                        .foregroundColor(.appTextPrimary)
-                    Text(pending.isEmpty ? "확인할 근무가 없어요" : "승인 기다리는 근무 \(pending.count)건")
-                        .font(.app(.callout, .medium))
-                        .foregroundColor(.appTextSecondary)
-                }
-                .padding(.horizontal, 4)
-                .padding(.top, 8)
-
-                if !stores.isEmpty {
-                    storePicker
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    sectionTitle("대기 중", count: pending.count)
-                    if isLoading && pending.isEmpty && recent.isEmpty {
-                        ProgressView()
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .appCard()
-                    } else if pending.isEmpty {
-                        Text("대기 중인 요청이 없어요.")
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("근무 승인")
+                            .font(.system(size: 26, weight: .heavy))
+                            .tracking(-0.6)
+                            .foregroundColor(.appTextPrimary)
+                        Text(pending.isEmpty ? "확인할 근무가 없어요" : "승인 기다리는 근무 \(pending.count)건")
                             .font(.app(.callout, .medium))
                             .foregroundColor(.appTextSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .appCard()
-                    } else {
-                        VStack(spacing: 10) {
-                            ForEach(pending) { item in
-                                VStack(alignment: .leading, spacing: 14) {
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.top, 8)
+
+                    if !stores.isEmpty {
+                        storePicker
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionTitle("대기 중", count: pending.count)
+                        if isLoading && pending.isEmpty && recent.isEmpty {
+                            ProgressView()
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .appCard()
+                        } else if pending.isEmpty {
+                            Text("대기 중인 요청이 없어요.")
+                                .font(.app(.callout, .medium))
+                                .foregroundColor(.appTextSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .appCard()
+                        } else {
+                            VStack(spacing: 10) {
+                                ForEach(pending) { item in
+                                    VStack(alignment: .leading, spacing: 14) {
+                                        HStack(spacing: 12) {
+                                            workerAvatar(item)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(workerDisplayName(item))
+                                                    .font(.system(size: 16, weight: .bold))
+                                                    .foregroundColor(.appTextPrimary)
+                                                Text(formatRange(item))
+                                                    .font(.app(.caption))
+                                                    .foregroundColor(.appTextSecondary)
+                                                    .lineLimit(1)
+                                                    .minimumScaleFactor(0.85)
+                                            }
+                                            Spacer(minLength: 8)
+                                            statusDot(
+                                                hasCheckout(item) ? "승인 대기" : "근무 중",
+                                                color: hasCheckout(item) ? .appCaution : .appAccent
+                                            )
+                                        }
+
+                                        Text(formatDetail(item))
+                                            .font(.app(.callout, .semibold))
+                                            .foregroundColor(.appTextPrimary)
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 11)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .background(Color.appFill)
+                                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
+
+                                        HStack(spacing: 8) {
+                                            Button(action: {
+                                                Task { await updateStatus(item, status: "rejected") }
+                                            }) {
+                                                decisionLabel("반려", foreground: .appWarning, background: Color.appWarning.opacity(0.12))
+                                            }
+                                            .buttonStyle(PressableRowStyle())
+                                            Button(action: {
+                                                Task { await updateStatus(item, status: "approved") }
+                                            }) {
+                                                decisionLabel("승인", foreground: .appOnInk, background: .appInk)
+                                            }
+                                            .buttonStyle(PressableRowStyle())
+                                            .disabled(!hasCheckout(item))
+                                            .opacity(hasCheckout(item) ? 1.0 : 0.5)
+                                        }
+                                        if !hasCheckout(item) {
+                                            Text("퇴근 처리 후 승인할 수 있어요.")
+                                                .font(.app(.caption, .medium))
+                                                .foregroundColor(.appTextSecondary)
+                                        }
+                                    }
+                                    .appCard()
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+                                            .stroke(Color.appAccent, lineWidth: highlightedLogId == item.id ? 2 : 0)
+                                    )
+                                    .id(item.id)
+                                }
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionTitle("최근 승인/반려", count: nil)
+                        if recent.isEmpty {
+                            Text("최근 내역이 없어요.")
+                                .font(.app(.callout, .medium))
+                                .foregroundColor(.appTextSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .appCard()
+                        } else {
+                            VStack(spacing: 0) {
+                                ForEach(Array(recent.enumerated()), id: \.element.id) { index, item in
+                                    if index > 0 {
+                                        Rectangle()
+                                            .fill(Color.appLine)
+                                            .frame(height: 1)
+                                    }
                                     HStack(spacing: 12) {
                                         workerAvatar(item)
                                         VStack(alignment: .leading, spacing: 2) {
@@ -83,106 +171,39 @@ struct ApprovalView: View {
                                                 .foregroundColor(.appTextSecondary)
                                                 .lineLimit(1)
                                                 .minimumScaleFactor(0.85)
+                                            Text(formatDetail(item))
+                                                .font(.app(.caption))
+                                                .foregroundColor(.appTextSecondary)
                                         }
                                         Spacer(minLength: 8)
                                         statusDot(
-                                            hasCheckout(item) ? "승인 대기" : "근무 중",
-                                            color: hasCheckout(item) ? .appCaution : .appAccent
+                                            normalizedStatus(item.status) == "approved" ? "승인" : "반려",
+                                            color: normalizedStatus(item.status) == "approved" ? .appAccent : .appWarning
                                         )
                                     }
-
-                                    Text(formatDetail(item))
-                                        .font(.app(.callout, .semibold))
-                                        .foregroundColor(.appTextPrimary)
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 11)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(Color.appFill)
-                                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
-
-                                    HStack(spacing: 8) {
-                                        Button(action: {
-                                            Task { await updateStatus(item, status: "rejected") }
-                                        }) {
-                                            decisionLabel("반려", foreground: .appWarning, background: Color.appWarning.opacity(0.12))
-                                        }
-                                        .buttonStyle(PressableRowStyle())
-                                        Button(action: {
-                                            Task { await updateStatus(item, status: "approved") }
-                                        }) {
-                                            decisionLabel("승인", foreground: .appOnInk, background: .appInk)
-                                        }
-                                        .buttonStyle(PressableRowStyle())
-                                        .disabled(!hasCheckout(item))
-                                        .opacity(hasCheckout(item) ? 1.0 : 0.5)
-                                    }
-                                    if !hasCheckout(item) {
-                                        Text("퇴근 처리 후 승인할 수 있어요.")
-                                            .font(.app(.caption, .medium))
-                                            .foregroundColor(.appTextSecondary)
-                                    }
+                                    .padding(.vertical, 12)
                                 }
-                                .appCard()
                             }
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 4)
+                            .background(Color.appSurface)
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                         }
                     }
-                }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    sectionTitle("최근 승인/반려", count: nil)
-                    if recent.isEmpty {
-                        Text("최근 내역이 없어요.")
-                            .font(.app(.callout, .medium))
-                            .foregroundColor(.appTextSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .appCard()
-                    } else {
-                        VStack(spacing: 0) {
-                            ForEach(Array(recent.enumerated()), id: \.element.id) { index, item in
-                                if index > 0 {
-                                    Rectangle()
-                                        .fill(Color.appLine)
-                                        .frame(height: 1)
-                                }
-                                HStack(spacing: 12) {
-                                    workerAvatar(item)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(workerDisplayName(item))
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundColor(.appTextPrimary)
-                                        Text(formatRange(item))
-                                            .font(.app(.caption))
-                                            .foregroundColor(.appTextSecondary)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.85)
-                                        Text(formatDetail(item))
-                                            .font(.app(.caption))
-                                            .foregroundColor(.appTextSecondary)
-                                    }
-                                    Spacer(minLength: 8)
-                                    statusDot(
-                                        normalizedStatus(item.status) == "approved" ? "승인" : "반려",
-                                        color: normalizedStatus(item.status) == "approved" ? .appAccent : .appWarning
-                                    )
-                                }
-                                .padding(.vertical, 12)
-                            }
-                        }
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 4)
-                        .background(Color.appSurface)
-                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+                    if let loadError {
+                        Text(loadError)
+                            .font(.app(.caption, .medium))
+                            .foregroundColor(.appWarning)
                     }
                 }
-
-                if let loadError {
-                    Text(loadError)
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appWarning)
-                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .onChange(of: focus, initial: true) { _, newValue in
+                guard newValue != nil else { return }
+                Task { await applyFocus(proxy) }
+            }
         }
         .appRefreshable {
             await refreshFromUser()
@@ -193,7 +214,8 @@ struct ApprovalView: View {
         }
         .onChange(of: selectedStoreId) { oldValue, _ in
             // 첫 선택(nil → 첫 매장)은 refresh()가 이어서 로드하므로 중복 요청을 건너뛴다.
-            guard oldValue != nil else { return }
+            // 배너로 들어온 경우도 applyFocus()가 직접 로드한다.
+            guard oldValue != nil, !isApplyingFocus else { return }
             Task { await loadLogs(force: false) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
@@ -372,6 +394,28 @@ struct ApprovalView: View {
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
+    }
+
+    // 배너에서 넘어온 매장으로 바꾸고, 해당 근무 카드로 스크롤한 뒤 잠깐 강조한다.
+    @MainActor
+    private func applyFocus(_ proxy: ScrollViewProxy) async {
+        guard let target = focus else { return }
+        focus = nil
+        isApplyingFocus = true
+        selectedStoreId = target.storeId
+        await loadLogs(force: true)
+        isApplyingFocus = false
+
+        guard let logId = target.logId ?? pending.first?.id,
+              pending.contains(where: { $0.id == logId }) else { return }
+        withAnimation(.easeOut(duration: 0.3)) {
+            proxy.scrollTo(logId, anchor: .center)
+        }
+        highlightedLogId = logId
+        try? await Task.sleep(for: .seconds(1.6))
+        if highlightedLogId == logId {
+            withAnimation(.easeOut(duration: 0.3)) { highlightedLogId = nil }
+        }
     }
 
     @MainActor

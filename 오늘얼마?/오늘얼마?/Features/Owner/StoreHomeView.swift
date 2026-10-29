@@ -4,7 +4,7 @@ import Supabase
 #endif
 
 struct StoreHomeView: View {
-    let onNavigateToApproval: () -> Void
+    let onNavigateToApproval: (ApprovalFocus) -> Void
 
     struct HomeWorkerRow: Decodable {
         let id: UUID
@@ -107,6 +107,7 @@ struct StoreHomeView: View {
     @State private var workedMinutes: Int = 0
     @State private var workerCount: Int = 0
     @State private var pendingCount: Int = 0
+    @State private var oldestPendingLogId: UUID?
     @State private var todayShifts: [TodayShift] = []
 
     @State private var lastStoresLoadedAt: Date?
@@ -275,7 +276,10 @@ struct StoreHomeView: View {
     }
 
     private var pendingBanner: some View {
-        Button(action: onNavigateToApproval) {
+        Button {
+            guard let storeId = selectedStoreId else { return }
+            onNavigateToApproval(ApprovalFocus(storeId: storeId, logId: oldestPendingLogId))
+        } label: {
             HStack(spacing: 10) {
                 Circle()
                     .fill(Color.appCaution)
@@ -523,6 +527,7 @@ struct StoreHomeView: View {
             workedMinutes = 0
             workerCount = 0
             pendingCount = 0
+            oldestPendingLogId = nil
             todayShifts = []
             didLoadSummary = false
         }
@@ -580,6 +585,7 @@ struct StoreHomeView: View {
     }
 
     struct LogRow: Decodable {
+        let id: UUID
         let worker_id: UUID
         let check_in_at: String
         let check_out_at: String?
@@ -627,7 +633,7 @@ struct StoreHomeView: View {
             // 이번 달 근무 기록, 직원, 남은 날짜 일정, 고정 스케줄을 동시에 받는다.
             async let logRows: [LogRow] = client
                 .from("work_logs")
-                .select("worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance,workers(name,hourly_wage,apply_night_allowance)")
+                .select("id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance,workers(name,hourly_wage,apply_night_allowance)")
                 .eq("store_id", value: storeId.uuidString)
                 .gte("check_in_at", value: iso.string(from: monthStart))
                 .lt("check_in_at", value: iso.string(from: monthEnd))
@@ -665,6 +671,7 @@ struct StoreHomeView: View {
             var minutes = 0
             var pay: Double = 0
             var pending = 0
+            var oldestPending: (date: Date, id: UUID)?
             var workedWorkers = Set<UUID>()
             var openSince: [UUID: (date: Date, name: String)] = [:]
             var loggedToday = Set<UUID>()
@@ -686,7 +693,12 @@ struct StoreHomeView: View {
                     }
                     continue
                 }
-                if status == "pending" { pending += 1 }
+                if status == "pending" {
+                    pending += 1
+                    if checkIn < (oldestPending?.date ?? .distantFuture) {
+                        oldestPending = (checkIn, row.id)
+                    }
+                }
 
                 // 승인 대기 건도 예상 인건비에는 포함한다 (반려만 제외).
                 let effectiveCheckOut = checkOut ?? checkIn
@@ -752,6 +764,7 @@ struct StoreHomeView: View {
                 workedMinutes = minutes
                 workerCount = workedWorkers.count
                 pendingCount = pending
+                oldestPendingLogId = oldestPending?.id
                 todayShifts = today
             }
             didLoadSummary = true

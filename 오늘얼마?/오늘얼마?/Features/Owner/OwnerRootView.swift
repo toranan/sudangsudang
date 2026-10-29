@@ -10,6 +10,7 @@ struct OwnerRootView: View {
     }
 
     @State private var selection: Tab = .home
+    @State private var approvalFocus: ApprovalFocus?
     @AppStorage("did_show_profile_welcome_owner") private var didShowProfileWelcome = false
     @State private var isPresentingWelcomeProfileSheet = false
     @State private var welcomeName: String = ""
@@ -18,7 +19,8 @@ struct OwnerRootView: View {
     var body: some View {
         TabView(selection: $selection) {
             NavigationStack {
-                StoreHomeView(onNavigateToApproval: {
+                StoreHomeView(onNavigateToApproval: { focus in
+                    approvalFocus = focus
                     selection = .approval
                 })
                     .toolbar(.hidden, for: .navigationBar)
@@ -41,7 +43,7 @@ struct OwnerRootView: View {
             .tag(Tab.schedule)
 
             NavigationStack {
-                ApprovalView()
+                ApprovalView(focus: $approvalFocus)
                     .toolbar(.hidden, for: .navigationBar)
             }
             .hidesSystemTabBar()
