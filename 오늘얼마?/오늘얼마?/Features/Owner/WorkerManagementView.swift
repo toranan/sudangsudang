@@ -52,6 +52,10 @@ struct WorkerManagementView: View {
         case evaluation = "평가"
 
         var id: String { rawValue }
+
+        static var visibleCases: [DetailTab] {
+            allCases.filter { $0 != .evaluation || AppConfig.isWorkerEvaluationEnabled }
+        }
     }
 
     @State private var stores: [StoreOption] = []
@@ -83,6 +87,9 @@ struct WorkerManagementView: View {
     @State private var lastStoresLoadedAt: Date?
     @State private var lastWorkersLoadedAt: Date?
     @State private var lastWorkersKey: String?
+    @State private var lastEvaluationsLoadedAt: Date?
+    @State private var lastEvaluationsStoreId: UUID?
+    @State private var lastEvaluationsWorkerIds: Set<UUID> = []
     @State private var storesRequest = LatestRequest()
     @State private var workersRequest = LatestRequest()
     private let cacheTTLSeconds: TimeInterval = 120
@@ -199,7 +206,7 @@ struct WorkerManagementView: View {
                                                     .font(.system(size: 12, weight: .medium, design: .rounded))
                                                     .foregroundColor(.appTextSecondary)
                                             }
-                                            if let summary = evaluationByWorker[worker.id] {
+                                            if AppConfig.isWorkerEvaluationEnabled, let summary = evaluationByWorker[worker.id] {
                                                 HStack(spacing: 6) {
                                                     Text(summary.levelTitle)
                                                         .font(.system(size: 11, weight: .semibold, design: .rounded))
@@ -275,7 +282,8 @@ struct WorkerManagementView: View {
             await refresh(force: false)
         }
         .onChange(of: selectedMonth) { _ in
-            Task { await loadWorkers(force: true) }
+            // 평가(지각·결근·별점)는 월과 무관하므로 월 이동 시에는 캐시를 재사용한다.
+            Task { await loadWorkers(force: true, reloadEvaluations: false) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
             Task { await refresh(force: false) }
@@ -385,7 +393,7 @@ struct WorkerManagementView: View {
     }
 
     @MainActor
-    private func loadWorkers(force: Bool) async {
+    private func loadWorkers(force: Bool, reloadEvaluations: Bool = true) async {
         guard let storeId = selectedStoreId else {
             workersRequest.invalidate()
             workers = []
@@ -434,8 +442,7 @@ struct WorkerManagementView: View {
                 let activeRows = rows.filter { $0.is_active ?? true }
                 guard isCurrentWorkersRequest(requestID, key: key) else { return }
                 workers = activeRows
-                await loadMonthlyLogs(storeId: storeId, workers: activeRows, month: requestedMonth, requestID: requestID, key: key)
-                await loadWorkerEvaluations(storeId: storeId, workers: activeRows, requestID: requestID, key: key)
+                await loadWorkerDependents(storeId: storeId, workers: activeRows, month: requestedMonth, requestID: requestID, key: key, reloadEvaluations: reloadEvaluations)
             } catch {
                 // Safety net: if DB migration is not applied yet, re-fetch without the new columns.
                 let message = error.localizedDescription.lowercased()
@@ -451,8 +458,7 @@ struct WorkerManagementView: View {
                     let activeRows = rows.filter { $0.is_active ?? true }
                     guard isCurrentWorkersRequest(requestID, key: key) else { return }
                     workers = activeRows
-                    await loadMonthlyLogs(storeId: storeId, workers: activeRows, month: requestedMonth, requestID: requestID, key: key)
-                    await loadWorkerEvaluations(storeId: storeId, workers: activeRows, requestID: requestID, key: key)
+                    await loadWorkerDependents(storeId: storeId, workers: activeRows, month: requestedMonth, requestID: requestID, key: key, reloadEvaluations: reloadEvaluations)
                 } else if message.contains("apply_weekly_allowance") || message.contains("deduction_type") {
                     let rows: [WorkerRow] = try await SupabaseManager.shared
                         .client
@@ -465,8 +471,7 @@ struct WorkerManagementView: View {
                     let activeRows = rows.filter { $0.is_active ?? true }
                     guard isCurrentWorkersRequest(requestID, key: key) else { return }
                     workers = activeRows
-                    await loadMonthlyLogs(storeId: storeId, workers: activeRows, month: requestedMonth, requestID: requestID, key: key)
-                    await loadWorkerEvaluations(storeId: storeId, workers: activeRows, requestID: requestID, key: key)
+                    await loadWorkerDependents(storeId: storeId, workers: activeRows, month: requestedMonth, requestID: requestID, key: key, reloadEvaluations: reloadEvaluations)
                 } else {
                     throw error
                 }
@@ -489,6 +494,34 @@ struct WorkerManagementView: View {
         return "\(comps.year ?? 0)-\(comps.month ?? 0)"
     }
 
+    // 월별 근무 기록과 평가를 동시에 받는다. 평가는 매장 단위 캐시가 유효하면 건너뛴다.
+    @MainActor
+    private func loadWorkerDependents(
+        storeId: UUID,
+        workers: [WorkerRow],
+        month: Date,
+        requestID: UUID,
+        key: String,
+        reloadEvaluations: Bool
+    ) async {
+        let evaluationsFresh = !AppConfig.isWorkerEvaluationEnabled || (
+            !reloadEvaluations
+            && lastEvaluationsStoreId == storeId
+            && lastEvaluationsLoadedAt.map { Date().timeIntervalSince($0) < cacheTTLSeconds } == true
+            && lastEvaluationsWorkerIds == Set(workers.map(\.id))
+        )
+        async let logs: Void = loadMonthlyLogs(storeId: storeId, workers: workers, month: month, requestID: requestID, key: key)
+        if !evaluationsFresh {
+            await loadWorkerEvaluations(storeId: storeId, workers: workers, requestID: requestID, key: key)
+            if isCurrentWorkersRequest(requestID, key: key) {
+                lastEvaluationsLoadedAt = Date()
+                lastEvaluationsStoreId = storeId
+                lastEvaluationsWorkerIds = Set(workers.map(\.id))
+            }
+        }
+        await logs
+    }
+
     private func isCurrentWorkersRequest(_ requestID: UUID, key: String) -> Bool {
         guard let storeId = selectedStoreId else { return false }
         let currentKey = "\(storeId.uuidString)|\(monthKey(selectedMonth))"
@@ -503,10 +536,14 @@ struct WorkerManagementView: View {
     
     // Formatting helpers utilized by parent view
     
-    private func formatWonRaw(_ value: Double) -> String {
+    private static let plainNumberFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .none
-        return formatter.string(from: NSNumber(value: Int(value))) ?? ""
+        return formatter
+    }()
+
+    private func formatWonRaw(_ value: Double) -> String {
+        Self.plainNumberFormatter.string(from: NSNumber(value: Int(value))) ?? ""
     }
 
 
@@ -1071,7 +1108,7 @@ struct WorkerDetailSheet: View {
                 .foregroundColor(.appTextPrimary)
 
             Picker("", selection: $detailTab) {
-                ForEach(WorkerManagementView.DetailTab.allCases) { tab in
+                ForEach(WorkerManagementView.DetailTab.visibleCases) { tab in
                     Text(tab.rawValue).tag(tab)
                 }
             }
@@ -1115,7 +1152,7 @@ struct WorkerDetailSheet: View {
             evaluationSummary = initialEvaluation ?? buildFallbackEvaluation(ownerRating: nil)
         }
         .task {
-            if !didLoadRating {
+            if AppConfig.isWorkerEvaluationEnabled, !didLoadRating {
                 await loadOwnerRating()
                 didLoadRating = true
             }

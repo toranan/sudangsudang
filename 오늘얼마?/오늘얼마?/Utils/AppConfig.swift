@@ -6,6 +6,10 @@ import Supabase
 struct AppConfig {
     // 2026년 최저시급. 시급 입력 시 미달 안내 기준.
     static let minimumHourlyWage: Double = 10_320
+    // 알바 평가(성장 단계·성실마크·사장 별점). 초기 사용자 확보 단계에서는 숨긴다.
+    // false면 화면에서 숨기고 관련 조회도 하지 않는다. 데이터와 테이블은 그대로 둔다.
+    static let isWorkerEvaluationEnabled = false
+
     // 신규 알바 등록 시 기본값으로 사용.
     static let defaultHourlyWage: Double = minimumHourlyWage
 
