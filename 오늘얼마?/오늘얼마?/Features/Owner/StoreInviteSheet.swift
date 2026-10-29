@@ -34,7 +34,7 @@ struct StoreInviteSheet: View {
                     } else if isLoading {
                         ProgressView()
                     } else {
-                        Text("------")
+                        Text("---- ----")
                             .font(.system(size: 40, weight: .heavy, design: .rounded))
                             .foregroundColor(.appLine)
                     }
@@ -113,8 +113,8 @@ struct StoreInviteSheet: View {
     }
 
     private func spaced(_ code: String) -> String {
-        guard code.count == 6 else { return code }
-        return "\(code.prefix(3)) \(code.suffix(3))"
+        guard code.count == 8 else { return code }
+        return "\(code.prefix(4)) \(code.suffix(4))"
     }
 
     private func shareMessage(code: String) -> String {

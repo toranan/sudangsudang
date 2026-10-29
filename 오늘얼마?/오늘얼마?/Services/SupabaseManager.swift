@@ -520,9 +520,13 @@ final class SupabaseManager {
             .execute()
             .value
         if let existing = rows.first {
+            // 예전에 영문이 섞인 코드로 만든 매장은 숫자 코드로 바꿔 준다.
+            guard existing.token.allSatisfy(\.isNumber), existing.token.count == Self.storeCodeLength else {
+                return try await reissueStoreCode(storeId: storeId)
+            }
             return existing.token
         }
-        return try await createInvite(storeId: storeId, expiresAt: Self.storeCodeExpiry, codeLength: 6, alphabet: Self.storeCodeAlphabet).token
+        return try await createInvite(storeId: storeId, expiresAt: Self.storeCodeExpiry, codeLength: Self.storeCodeLength, alphabet: Self.storeCodeAlphabet).token
     }
 
     // 코드가 밖으로 퍼졌을 때 새 코드로 바꾼다. 이전 코드는 바로 막힌다.
@@ -550,7 +554,7 @@ final class SupabaseManager {
                 userInfo: [NSLocalizedDescriptionKey: "이전 코드를 막지 못했어요. 잠시 후 다시 시도해주세요."]
             )
         }
-        return try await createInvite(storeId: storeId, expiresAt: Self.storeCodeExpiry, codeLength: 6, alphabet: Self.storeCodeAlphabet).token
+        return try await createInvite(storeId: storeId, expiresAt: Self.storeCodeExpiry, codeLength: Self.storeCodeLength, alphabet: Self.storeCodeAlphabet).token
     }
 
     private static let storeCodeExpiry: Date = {
@@ -561,8 +565,9 @@ final class SupabaseManager {
         return AppTime.calendar.date(from: components) ?? Date.distantFuture
     }()
 
-    // 헷갈리는 글자(0/O, 1/I/L)는 뺀다. 6자리 × 31글자 ≈ 8.9억 가지.
-    private static let storeCodeAlphabet = Array("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
+    // 입력하기 쉽게 숫자만 쓴다. 오래 유지되는 코드라 48시간 초대코드(6자리)보다 길게 8자리(1억 가지).
+    private static let storeCodeLength = 8
+    private static let storeCodeAlphabet = Array("0123456789")
 
     private func generateInviteCode(length: Int, alphabet: [Character]) -> String {
         String((0..<length).compactMap { _ in alphabet.randomElement() })
