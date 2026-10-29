@@ -6,21 +6,18 @@ import UIKit
 import Supabase
 #endif
 
-// 사장님·알바생 공통 '문의하기'. send-inquiry 함수가 저장하고 운영자 메일로 바로 보낸다.
+// 사장님·알바생 공통 '문의하기'. inquiries 테이블에 바로 넣고, 운영자는 Supabase 대시보드에서 본다.
 struct InquiryView: View {
     let role: String
 
-    private struct InquiryRequest: Encodable {
+    private struct InquiryInsert: Encodable {
+        let user_id: UUID
         let category: String
         let message: String
         let role: String
-        let contact: String
-        let appVersion: String
+        let contact: String?
+        let app_version: String
         let device: String
-    }
-
-    private struct InquiryResponse: Decodable {
-        let id: UUID
     }
 
     private static let categories: [(value: String, title: String)] = [
@@ -157,18 +154,21 @@ struct InquiryView: View {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
         let device = "\(UIDevice.current.model) iOS \(UIDevice.current.systemVersion)"
+        let trimmedContact = contact.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            let _: InquiryResponse = try await SupabaseManager.shared.client.functions.invoke(
-                "send-inquiry",
-                options: FunctionInvokeOptions(body: InquiryRequest(
+            let userId = try await SupabaseManager.shared.currentUserId()
+            try await SupabaseManager.shared.client
+                .from("inquiries")
+                .insert(InquiryInsert(
+                    user_id: userId,
                     category: category,
-                    message: trimmedMessage,
+                    message: String(trimmedMessage.prefix(4000)),
                     role: role,
-                    contact: contact.trimmingCharacters(in: .whitespacesAndNewlines),
-                    appVersion: "\(version) (\(build))",
+                    contact: trimmedContact.isEmpty ? nil : trimmedContact,
+                    app_version: "\(version) (\(build))",
                     device: device
                 ))
-            )
+                .execute()
             Haptics.success()
             isMessageFocused = false
             withAnimation(.easeOut(duration: 0.2)) { didSend = true }

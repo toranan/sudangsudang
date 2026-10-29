@@ -17,36 +17,42 @@ struct StoreInviteSheet: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        VStack(spacing: 20) {
-            VStack(spacing: 6) {
-                Text("\(storeName) 매장 코드")
-                    .font(.app(.callout, .medium))
+        VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("매장 코드")
+                    .font(.system(size: 22, weight: .heavy))
+                    .tracking(-0.4)
+                    .foregroundColor(.appTextPrimary)
+                Text("알바생이 앱에서 이 코드를 입력하면 \(storeName)에 바로 연결돼요")
+                    .font(.app(.caption))
                     .foregroundColor(.appTextSecondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(spacing: 6) {
 
                 Group {
                     if let code {
                         Text(spaced(code))
-                            .font(.system(size: 40, weight: .heavy, design: .rounded))
+                            .font(.system(size: 34, weight: .heavy, design: .rounded))
                             .tracking(2)
+                            .monospacedDigit()
                             .foregroundColor(.appTextPrimary)
                             .textSelection(.enabled)
                     } else if isLoading {
                         ProgressView()
                     } else {
                         Text("---- ----")
-                            .font(.system(size: 40, weight: .heavy, design: .rounded))
+                            .font(.system(size: 34, weight: .heavy, design: .rounded))
                             .foregroundColor(.appLine)
                     }
                 }
-                .frame(height: 56)
-
-                Text("알바생이 앱에서 이 코드를 입력하면 바로 연결돼요")
-                    .font(.app(.caption))
-                    .foregroundColor(.appTextSecondary)
-                    .multilineTextAlignment(.center)
+                .frame(height: 48)
             }
-            .padding(.top, 8)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 18)
+            .background(Color.appFill, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
 
             HStack(spacing: 10) {
                 Button {
@@ -92,11 +98,11 @@ struct StoreInviteSheet: View {
             .disabled(code == nil || isReissuing)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 24)
+        .padding(.top, 28)
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity)
         .background(Color.appSurface.ignoresSafeArea())
-        .presentationDetents([.height(340)])
+        .presentationDetents([.height(360)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
         .alert("코드를 새로 만들까요?", isPresented: $isShowingReissueConfirm) {

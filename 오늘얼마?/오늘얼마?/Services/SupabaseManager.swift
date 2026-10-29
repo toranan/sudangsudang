@@ -520,9 +520,9 @@ final class SupabaseManager {
             .execute()
             .value
         if let existing = rows.first {
-            // 예전에 영문이 섞인 코드로 만든 매장은 숫자 코드로 바꿔 준다.
+            // 예전에 영문이 섞인 코드로 만든 매장은 숫자 코드로 바꿔 준다. 바꾸지 못하면 기존 코드를 그대로 쓴다.
             guard existing.token.allSatisfy(\.isNumber), existing.token.count == Self.storeCodeLength else {
-                return try await reissueStoreCode(storeId: storeId)
+                return (try? await reissueStoreCode(storeId: storeId)) ?? existing.token
             }
             return existing.token
         }
@@ -530,7 +530,26 @@ final class SupabaseManager {
     }
 
     // 코드가 밖으로 퍼졌을 때 새 코드로 바꾼다. 이전 코드는 바로 막힌다.
+    // invites에 사장님 UPDATE 권한이 없어서, 만료와 발급은 서버 함수(reissue_store_code)가 한 번에 한다.
     func reissueStoreCode(storeId: UUID) async throws -> String {
+        do {
+            let token: String = try await client
+                .rpc("reissue_store_code", params: ["p_store_id": storeId.uuidString])
+                .execute()
+                .value
+            return token
+        } catch where Self.isMissingRPC(error) {
+            // 서버 함수가 아직 없으면 예전 방식으로 시도한다.
+            return try await legacyReissueStoreCode(storeId: storeId)
+        }
+    }
+
+    private static func isMissingRPC(_ error: Error) -> Bool {
+        let message = String(describing: error).lowercased()
+        return message.contains("pgrst202") || message.contains("could not find the function")
+    }
+
+    private func legacyReissueStoreCode(storeId: UUID) async throws -> String {
         struct ExpirePayload: Encodable { let expires_at: String }
         let now = AppTime.iso.string(from: Date())
         try await client
