@@ -52,19 +52,38 @@ struct ContentView: View {
                     Spacer()
                 }
                 .padding(.top, 40)
+                .transition(.opacity)
             } else if isLoggedIn {
                 if userRole == .owner {
                     OwnerRootView()
+                        .transition(.opacity)
                 } else if userRole == .worker {
                     WorkerRootView()
+                        .transition(.opacity)
                 } else {
-                    // Fallback or Role selection if not set
-                    Text("Role not found")
+                    // 역할이 비어 있으면 로그인 화면으로 돌아갈 수 있게 한다.
+                    VStack(spacing: 14) {
+                        Text("계정 정보를 불러오지 못했어요.")
+                            .font(.app(.callout, .medium))
+                            .foregroundColor(.appTextSecondary)
+                        Button("다시 로그인") {
+                            Task {
+                                await SupabaseManager.shared.signOut()
+                                NotificationCenter.default.post(name: .didLogout, object: nil)
+                            }
+                        }
+                        .buttonStyle(SecondaryButtonStyle(foregroundColor: .appTextPrimary))
+                    }
+                    .padding(.horizontal, 20)
                 }
             } else {
                 AuthView(isLoggedIn: $isLoggedIn, userRole: $userRole, resumeProfile: resumeProfile)
+                    .transition(.opacity)
             }
         }
+        // 스플래시 → 로그인/홈, 로그인 → 홈 전환을 부드럽게 바꾼다.
+        .animation(.easeOut(duration: 0.25), value: isRestoringInitialSession)
+        .animation(.easeOut(duration: 0.25), value: isLoggedIn)
         .task {
             await restoreSessionIfPossible()
             isRestoringInitialSession = false
