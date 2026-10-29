@@ -67,6 +67,45 @@ final class HowMuchTodayTests: XCTestCase {
         XCTAssertEqual(pay, 16_500, accuracy: 0.001)
     }
 
+    func testWeeklyAllowanceCrossingMonthBelongsToSundayMonth() throws {
+        let logs: [(String, String?)] = [
+            ("2026-09-28T09:00:00+09:00", "2026-09-28T12:00:00+09:00"),
+            ("2026-09-29T09:00:00+09:00", "2026-09-29T12:00:00+09:00"),
+            ("2026-09-30T09:00:00+09:00", "2026-09-30T12:00:00+09:00"),
+            ("2026-10-01T09:00:00+09:00", "2026-10-01T12:00:00+09:00"),
+            ("2026-10-02T09:00:00+09:00", "2026-10-02T12:00:00+09:00"),
+        ]
+        let september = try makeDate("2026-09-01T00:00:00+09:00")
+        let october = try makeDate("2026-10-01T00:00:00+09:00")
+
+        XCTAssertEqual(
+            PayrollCalculator.estimateWeeklyAllowancePay(
+                checkInOut: logs,
+                wage: 10_000,
+                attributedToMonth: september
+            ),
+            0,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            PayrollCalculator.estimateWeeklyAllowancePay(
+                checkInOut: logs,
+                wage: 10_000,
+                attributedToMonth: october
+            ),
+            30_000,
+            accuracy: 0.001
+        )
+    }
+
+    func testWeeklyAllowanceLogRangeIncludesWholeBoundaryWeeks() throws {
+        let october = try makeDate("2026-10-15T00:00:00+09:00")
+        let range = PayrollCalculator.weeklyAllowanceLogRange(forMonth: october)
+
+        XCTAssertEqual(range.start, try makeDate("2026-09-28T00:00:00+09:00"))
+        XCTAssertEqual(range.end, try makeDate("2026-11-02T00:00:00+09:00"))
+    }
+
     private func makeDate(_ value: String) throws -> Date {
         let formatter = ISO8601DateFormatter()
         guard let date = formatter.date(from: value) else {

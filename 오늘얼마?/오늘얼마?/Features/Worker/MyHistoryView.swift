@@ -250,6 +250,7 @@ struct MyHistoryView: View {
             let calendar = AppTime.calendar
             let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
             let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? Date()
+            let allowanceLogRange = PayrollCalculator.weeklyAllowanceLogRange(forMonth: monthStart)
             let iso = AppTime.iso
 
             let logs: [LogRow] = try await SupabaseManager.shared
@@ -257,8 +258,8 @@ struct MyHistoryView: View {
                 .from("work_logs")
                 .select("id,store_id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
                 .in("worker_id", values: workerIds)
-                .gte("check_in_at", value: iso.string(from: monthStart))
-                .lt("check_in_at", value: iso.string(from: monthEnd))
+                .gte("check_in_at", value: iso.string(from: allowanceLogRange.start))
+                .lt("check_in_at", value: iso.string(from: allowanceLogRange.end))
                 .order("check_in_at", ascending: false)
                 .execute()
                 .value
@@ -271,9 +272,21 @@ struct MyHistoryView: View {
             var totalPay: Double = 0
             var rendered: [WorkItem] = []
 
-            let countedLogs = logs.filter { log in
+            let monthLogs = logs.filter { log in
+                guard let checkIn = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) else {
+                    return false
+                }
+                return checkIn >= monthStart && checkIn < monthEnd
+            }
+            let allowanceLogs = logs.filter { log in
                 let hasCheckout = !(log.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
                 return normalizedStatus(log.status) == "approved" && hasCheckout
+            }
+            let countedLogs = allowanceLogs.filter { log in
+                guard let checkIn = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) else {
+                    return false
+                }
+                return checkIn >= monthStart && checkIn < monthEnd
             }
 
             // Summary totals should include the entire month (not only the first page).
@@ -298,9 +311,11 @@ struct MyHistoryView: View {
 
             // Net pay summary is computed per worker record (store-specific settings).
             var netTotal: Double = 0
-            let grouped = Dictionary(grouping: countedLogs, by: { $0.worker_id })
-            for (workerId, wLogs) in grouped {
-                guard let worker = workerById[workerId] else { continue }
+            let monthLogsByWorker = Dictionary(grouping: countedLogs, by: { $0.worker_id })
+            let allowanceLogsByWorker = Dictionary(grouping: allowanceLogs, by: { $0.worker_id })
+            for worker in workers {
+                let wLogs = monthLogsByWorker[worker.id, default: []]
+                let weeklyLogs = allowanceLogsByWorker[worker.id, default: []]
                 let wage = worker.hourly_wage ?? 0
                 let gross = wLogs.reduce(0) { partial, log in
                     let checkIn = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
@@ -322,7 +337,11 @@ struct MyHistoryView: View {
                     deductionType = local.deductionType
                 }
                 let weeklyAllowance = applyWeekly
-                    ? PayrollCalculator.estimateWeeklyAllowancePay(checkInOut: wLogs.map { ($0.check_in_at, $0.check_out_at) }, wage: wage)
+                    ? PayrollCalculator.estimateWeeklyAllowancePay(
+                        checkInOut: weeklyLogs.map { ($0.check_in_at, $0.check_out_at) },
+                        wage: wage,
+                        attributedToMonth: monthStart
+                    )
                     : 0
                 let breakdown = PayrollCalculator.deductionBreakdown(gross: gross + weeklyAllowance, type: deductionType)
                 let net = max(0, gross + weeklyAllowance - breakdown.totalDeduction)
@@ -330,7 +349,7 @@ struct MyHistoryView: View {
             }
 
             // Render list items (first page only)
-            for log in logs.prefix(20) {
+            for log in monthLogs.prefix(20) {
                 let checkIn = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
                 let checkOut = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
                 let minutes = Self.calcMinutes(checkIn: checkIn, checkOut: checkOut)

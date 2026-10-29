@@ -141,9 +141,23 @@ enum PayrollCalculator {
         }
     }
 
-    static func estimateWeeklyAllowancePay(checkInOut: [(String, String?)], wage: Double) -> Double {
-        // Estimate weekly allowance based on logs in a single month.
-        // Rule-of-thumb: if weekly working time >= 15h, add (weeklyHours/40)*8 hours.
+    static func weeklyAllowanceLogRange(forMonth month: Date) -> DateInterval {
+        let cal = weeklyCalendar()
+        let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: month)) ?? month
+        let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart) ?? monthStart
+        let firstWeekStart = cal.dateInterval(of: .weekOfYear, for: monthStart)?.start ?? monthStart
+        let lastMomentOfMonth = monthEnd.addingTimeInterval(-1)
+        let lastWeekEnd = cal.dateInterval(of: .weekOfYear, for: lastMomentOfMonth)?.end ?? monthEnd
+        return DateInterval(start: firstWeekStart, end: lastWeekEnd)
+    }
+
+    static func estimateWeeklyAllowancePay(
+        checkInOut: [(String, String?)],
+        wage: Double,
+        attributedToMonth month: Date? = nil
+    ) -> Double {
+        // Monday-Sunday estimate. A week is attributed to the month containing Sunday,
+        // so a week crossing a month boundary is neither omitted nor counted twice.
         var cal = Calendar(identifier: .gregorian)
         cal.locale = Locale(identifier: "ko_KR")
         cal.timeZone = AppTime.timeZone
@@ -152,25 +166,40 @@ enum PayrollCalculator {
         let parser = AppTime.isoWithFractionalSeconds
         let iso = AppTime.iso
 
-        var minutesByWeek: [String: Int] = [:]
+        var minutesByWeek: [Date: Int] = [:]
         for (checkInAt, checkOutAt) in checkInOut {
-            let start = parser.date(from: checkInAt) ?? iso.date(from: checkInAt) ?? Date()
-            let end = checkOutAt.flatMap { parser.date(from: $0) ?? iso.date(from: $0) } ?? start
+            guard let start = parser.date(from: checkInAt) ?? iso.date(from: checkInAt),
+                  let end = checkOutAt.flatMap({ parser.date(from: $0) ?? iso.date(from: $0) }),
+                  end > start,
+                  let weekStart = cal.dateInterval(of: .weekOfYear, for: start)?.start else {
+                continue
+            }
             let minutes = max(0, Int(floor(end.timeIntervalSince(start) / 60.0)))
-
-            let comps = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: start)
-            let key = "\(comps.yearForWeekOfYear ?? 0)-\(comps.weekOfYear ?? 0)"
-            minutesByWeek[key, default: 0] += minutes
+            minutesByWeek[weekStart, default: 0] += minutes
         }
 
         var total: Double = 0
-        for (_, weekMinutes) in minutesByWeek {
+        for (weekStart, weekMinutes) in minutesByWeek {
+            if let month {
+                guard let weeklyHoliday = cal.date(byAdding: .day, value: 6, to: weekStart),
+                      cal.isDate(weeklyHoliday, equalTo: month, toGranularity: .month) else {
+                    continue
+                }
+            }
             if weekMinutes < 15 * 60 { continue }
             let weekHours = Double(weekMinutes) / 60.0
-            let allowanceHours = (weekHours / 40.0) * 8.0
+            let allowanceHours = min(8.0, (weekHours / 40.0) * 8.0)
             total += allowanceHours * wage
         }
         return total
+    }
+
+    private static func weeklyCalendar() -> Calendar {
+        var cal = Calendar(identifier: .gregorian)
+        cal.locale = Locale(identifier: "ko_KR")
+        cal.timeZone = AppTime.timeZone
+        cal.firstWeekday = 2 // Monday
+        return cal
     }
 
     static func estimateAnnualRefund(monthlyTaxablePay: Double, deductionType: PayrollDeductionType) -> PayrollRefundEstimate {

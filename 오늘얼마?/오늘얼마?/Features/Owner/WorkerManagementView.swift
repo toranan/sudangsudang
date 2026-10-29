@@ -58,6 +58,7 @@ struct WorkerManagementView: View {
     @State private var selectedStoreId: UUID?
     @State private var workers: [WorkerRow] = []
     @State private var monthLogsByWorker: [UUID: [WorkLogRow]] = [:]
+    @State private var weeklyAllowanceLogsByWorker: [UUID: [WorkLogRow]] = [:]
     @State private var monthPayByWorker: [UUID: Double] = [:]
     @State private var monthMinutesByWorker: [UUID: Int] = [:]
     @State private var evaluationByWorker: [UUID: EvaluationSummary] = [:]
@@ -252,6 +253,8 @@ struct WorkerManagementView: View {
             WorkerDetailSheet(
                 worker: worker,
                 monthLogs: monthLogsByWorker[worker.id] ?? [],
+                weeklyAllowanceLogs: weeklyAllowanceLogsByWorker[worker.id] ?? [],
+                payrollMonth: selectedMonth,
                 monthPay: monthPayByWorker[worker.id] ?? 0,
                 initialEvaluation: evaluationByWorker[worker.id]?.value,
                 onUpdate: { await loadWorkers(force: true) }
@@ -525,6 +528,7 @@ struct WorkerManagementView: View {
             let calendar = AppTime.calendar
             let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
             let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? Date()
+            let allowanceLogRange = PayrollCalculator.weeklyAllowanceLogRange(forMonth: monthStart)
             let iso = AppTime.iso
 
             let rows: [WorkLogRow] = try await SupabaseManager.shared
@@ -532,14 +536,21 @@ struct WorkerManagementView: View {
                 .from("work_logs")
                 .select("id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
                 .eq("store_id", value: storeId.uuidString)
-                .gte("check_in_at", value: iso.string(from: monthStart))
-                .lt("check_in_at", value: iso.string(from: monthEnd))
+                .gte("check_in_at", value: iso.string(from: allowanceLogRange.start))
+                .lt("check_in_at", value: iso.string(from: allowanceLogRange.end))
                 .execute()
                 .value
 
-            var byWorker: [UUID: [WorkLogRow]] = [:]
+            var allowanceByWorker: [UUID: [WorkLogRow]] = [:]
             for row in rows where normalizedStatus(row.status) == "approved" && !(row.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
-                byWorker[row.worker_id, default: []].append(row)
+                allowanceByWorker[row.worker_id, default: []].append(row)
+            }
+            var byWorker: [UUID: [WorkLogRow]] = [:]
+            for (workerId, workerLogs) in allowanceByWorker {
+                byWorker[workerId] = workerLogs.filter { log in
+                    guard let checkIn = AppTime.parseISO(log.check_in_at) else { return false }
+                    return checkIn >= monthStart && checkIn < monthEnd
+                }
             }
 
             var payByWorker: [UUID: Double] = [:]
@@ -568,6 +579,7 @@ struct WorkerManagementView: View {
 
             guard isCurrentWorkersRequest(requestID, key: key) else { return }
             monthLogsByWorker = byWorker
+            weeklyAllowanceLogsByWorker = allowanceByWorker
             monthPayByWorker = payByWorker
             monthMinutesByWorker = minutesByWorker
         } catch {
@@ -1012,6 +1024,8 @@ struct WorkerManagementView: View {
 struct WorkerDetailSheet: View {
     let worker: WorkerManagementView.WorkerRow
     let monthLogs: [WorkerManagementView.WorkLogRow]
+    let weeklyAllowanceLogs: [WorkerManagementView.WorkLogRow]
+    let payrollMonth: Date
     let monthPay: Double
     let initialEvaluation: WorkerEvaluationSummary?
     let onUpdate: () async -> Void
@@ -2140,8 +2154,9 @@ struct WorkerDetailSheet: View {
 
     private func estimateWeeklyAllowancePay(wage: Double) -> Double {
         PayrollCalculator.estimateWeeklyAllowancePay(
-            checkInOut: monthLogs.map { ($0.check_in_at, $0.check_out_at) },
-            wage: wage
+            checkInOut: weeklyAllowanceLogs.map { ($0.check_in_at, $0.check_out_at) },
+            wage: wage,
+            attributedToMonth: payrollMonth
         )
     }
 

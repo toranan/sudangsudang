@@ -816,6 +816,7 @@ struct WorkerHomeView: View {
 
             let workerIds = activeWorkers.map { $0.id.uuidString }
             let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? Date()
+            let allowanceLogRange = PayrollCalculator.weeklyAllowanceLogRange(forMonth: monthStart)
             let iso = AppTime.iso
 
             let logs: [LogRow] = try await SupabaseManager.shared
@@ -823,8 +824,8 @@ struct WorkerHomeView: View {
                 .from("work_logs")
                 .select("store_id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
                 .in("worker_id", values: workerIds)
-                .gte("check_in_at", value: iso.string(from: monthStart))
-                .lt("check_in_at", value: iso.string(from: monthEnd))
+                .gte("check_in_at", value: iso.string(from: allowanceLogRange.start))
+                .lt("check_in_at", value: iso.string(from: allowanceLogRange.end))
                 .execute()
                 .value
 
@@ -853,10 +854,16 @@ struct WorkerHomeView: View {
                 }
 
                 let storeLogs = logsByWorkerId[worker.id, default: []].filter { $0.store_id == storeId }
-                let countedLogs = storeLogs.filter { log in
+                let allowanceLogs = storeLogs.filter { log in
                     let status = log.status ?? "pending"
                     let hasCheckout = !(log.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
                     return status == "approved" && hasCheckout
+                }
+                let countedLogs = allowanceLogs.filter { log in
+                    guard let checkIn = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) else {
+                        return false
+                    }
+                    return checkIn >= monthStart && checkIn < monthEnd
                 }
 
                 var monthMinutes = 0
@@ -885,7 +892,11 @@ struct WorkerHomeView: View {
                 }
 
                 let weeklyAllowance = applyWeeklyAllowance
-                    ? PayrollCalculator.estimateWeeklyAllowancePay(checkInOut: countedLogs.map { ($0.check_in_at, $0.check_out_at) }, wage: wage)
+                    ? PayrollCalculator.estimateWeeklyAllowancePay(
+                        checkInOut: allowanceLogs.map { ($0.check_in_at, $0.check_out_at) },
+                        wage: wage,
+                        attributedToMonth: monthStart
+                    )
                     : 0
                 let breakdown = PayrollCalculator.deductionBreakdown(gross: monthGross + weeklyAllowance, type: deductionType)
                 let monthNet = max(0, monthGross + weeklyAllowance - breakdown.totalDeduction)

@@ -626,6 +626,7 @@ private extension WorkerCheckInView {
         }
 
         let counted = approvedMonthLogsForNet()
+        let allowanceLogs = approvedAllowanceLogsForNet()
         let wage = store.hourlyWage
 
         let parser = AppTime.isoWithFractionalSeconds
@@ -644,12 +645,26 @@ private extension WorkerCheckInView {
             )
         }
         let weeklyAllowance = applyWeeklyAllowance
-            ? PayrollCalculator.estimateWeeklyAllowancePay(checkInOut: counted.map { ($0.check_in_at, $0.check_out_at) }, wage: wage)
+            ? PayrollCalculator.estimateWeeklyAllowancePay(
+                checkInOut: allowanceLogs.map { ($0.check_in_at, $0.check_out_at) },
+                wage: wage,
+                attributedToMonth: Date()
+            )
             : 0
         return max(0, gross + weeklyAllowance)
     }
 
     func approvedMonthLogsForNet() -> [WorkLogRow] {
+        let calendar = AppTime.calendar
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
+        let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? Date()
+        return approvedAllowanceLogsForNet().filter { log in
+            guard let checkIn = AppTime.parseISO(log.check_in_at) else { return false }
+            return checkIn >= monthStart && checkIn < monthEnd
+        }
+    }
+
+    func approvedAllowanceLogsForNet() -> [WorkLogRow] {
         monthLogsForNet.filter { log in
             let hasCheckout = !(log.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
             return normalizedStatus(log.status) == "approved" && hasCheckout
@@ -1152,7 +1167,7 @@ private extension WorkerCheckInView {
         do {
             let calendar = AppTime.calendar
             let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
-            let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? Date()
+            let allowanceLogRange = PayrollCalculator.weeklyAllowanceLogRange(forMonth: monthStart)
             let iso = AppTime.iso
             let rows: [WorkLogRow] = try await SupabaseManager.shared
                 .client
@@ -1160,8 +1175,8 @@ private extension WorkerCheckInView {
                 .select("id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
                 .eq("store_id", value: store.id.uuidString)
                 .eq("worker_id", value: store.workerId.uuidString)
-                .gte("check_in_at", value: iso.string(from: monthStart))
-                .lt("check_in_at", value: iso.string(from: monthEnd))
+                .gte("check_in_at", value: iso.string(from: allowanceLogRange.start))
+                .lt("check_in_at", value: iso.string(from: allowanceLogRange.end))
                 .limit(500)
                 .execute()
                 .value
