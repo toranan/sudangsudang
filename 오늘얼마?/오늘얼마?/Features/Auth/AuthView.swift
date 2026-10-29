@@ -8,6 +8,9 @@ import Supabase
 import KakaoSDKAuth
 import KakaoSDKUser
 #endif
+#if canImport(KakaoSDKCommon)
+import KakaoSDKCommon
+#endif
 
 struct AuthBrandView: View {
     var body: some View {
@@ -50,6 +53,8 @@ struct AuthView: View {
     @State private var pendingUserId: UUID?
     @State private var pendingEmail: String?
     @State private var didApplyResume: Bool = false
+    // 로그인·가입 요청 중에는 버튼을 막아 두 번 눌리지 않게 한다.
+    @State private var isWorking: Bool = false
     
     var body: some View {
         VStack(spacing: 24) {
@@ -76,7 +81,23 @@ struct AuthView: View {
             applyResumeProfileIfNeeded()
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: step)
+        .animation(.easeOut(duration: 0.2), value: authError)
+        .onChange(of: authError) { error in
+            if error != nil { Haptics.warning() }
+        }
         .background(Color.appBackground.ignoresSafeArea())
+    }
+
+    @ViewBuilder
+    private var errorText: some View {
+        if let authError {
+            Text(authError)
+                .font(.app(.caption, .medium))
+                .foregroundColor(.appWarning)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .transition(.opacity)
+        }
     }
 
     private var roleStep: some View {
@@ -114,7 +135,16 @@ struct AuthView: View {
             }
             .buttonStyle(ScaleButtonStyle())
 
+            if isWorking {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
+            }
+
+            errorText
+
             Button(action: {
+                authError = nil
                 step = .apple
             }) {
                 Text("이전으로")
@@ -124,6 +154,7 @@ struct AuthView: View {
                     .padding(.top, 12)
             }
         }
+        .disabled(isWorking)
         .padding(.horizontal, 20)
         .padding(.bottom, 40)
     }
@@ -164,12 +195,19 @@ struct AuthView: View {
 
     private var appleFooter: some View {
         VStack(spacing: 12) {
+            errorText
+
             Button(action: {
                 Task { await signInWithKakao() }
             }) {
                 HStack(spacing: 8) {
-                    Image(systemName: "message.fill")
-                        .font(.system(size: 15, weight: .semibold))
+                    if isWorking {
+                        ProgressView()
+                            .tint(.black.opacity(0.85))
+                    } else {
+                        Image(systemName: "message.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
                     Text("카카오톡으로 시작하기")
                         .font(.app(.body, .bold))
                 }
@@ -211,17 +249,35 @@ struct AuthView: View {
                         await signInWithApple(idToken: idToken, nonce: nonce)
                     }
                 case .failure(let error):
-                    authError = AppErrorMessage.userMessage(error)
+                    showAuthError(error)
                 }
             })
             .signInWithAppleButtonStyle(.black)
             .frame(height: 54)
             .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
+            .opacity(isWorking ? 0.5 : 1)
         }
+        .disabled(isWorking)
         .padding(.horizontal, 20)
         .padding(.top, 10)
         .padding(.bottom, 10)
         .background(Color.appBackground)
+    }
+
+    // 사용자가 로그인 창을 닫은 경우는 오류로 보여주지 않는다.
+    private func showAuthError(_ error: Error) {
+        if let appleError = error as? ASAuthorizationError, appleError.code == .canceled {
+            return
+        }
+        #if canImport(KakaoSDKCommon)
+        if case SdkError.ClientFailed(let reason, _) = error, reason == .Cancelled {
+            return
+        }
+        #endif
+        if AppErrorMessage.isCancellation(error) {
+            return
+        }
+        authError = AppErrorMessage.userMessage(error)
     }
 
     private func formattedAppleName(_ components: PersonNameComponents?) -> String? {
@@ -232,7 +288,12 @@ struct AuthView: View {
         return value.isEmpty ? nil : value
     }
 
+    @MainActor
     private func signInWithApple(idToken: String, nonce: String) async {
+        guard !isWorking else { return }
+        isWorking = true
+        authError = nil
+        defer { isWorking = false }
         #if canImport(Supabase)
         do {
             SupabaseManager.shared.clearCustomSession()
@@ -333,7 +394,12 @@ struct AuthView: View {
     }
     #endif
 
+    @MainActor
     private func signInWithKakao() async {
+        guard !isWorking else { return }
+        isWorking = true
+        authError = nil
+        defer { isWorking = false }
         #if canImport(KakaoSDKAuth)
         do {
             let token = try await loginWithKakao()
@@ -345,7 +411,7 @@ struct AuthView: View {
             pendingEmail = response.email
             step = .role
         } catch {
-            authError = AppErrorMessage.userMessage(error)
+            showAuthError(error)
         }
         #else
         authError = "카카오 SDK가 설치되지 않았어요."
@@ -401,6 +467,11 @@ struct AuthView: View {
 
     @MainActor
     private func completeSignup(selectedRole: Profile.Role) async {
+        guard !isWorking else { return }
+        isWorking = true
+        authError = nil
+        defer { isWorking = false }
+        Haptics.tap()
         userRole = selectedRole
 
         guard let userId = pendingUserId else {
