@@ -187,7 +187,7 @@ struct PayrollDefaultsView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
-            .padding(.bottom, 40)
+            .padding(.bottom, appTabBarReservedHeight + 24)
         }
         .appRefreshable {
             await load()

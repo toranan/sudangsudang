@@ -88,7 +88,8 @@ struct OwnerMonthlyDetailView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.top, 12)
+            .padding(.bottom, appTabBarReservedHeight + 24)
         }
         .appRefreshable {
             await loadAll()

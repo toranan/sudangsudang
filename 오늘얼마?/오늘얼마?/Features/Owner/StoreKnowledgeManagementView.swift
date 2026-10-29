@@ -30,7 +30,7 @@ struct StoreKnowledgeManagementView: View {
 
             ScrollView {
                 documentsPanel
-                    .padding(.bottom, 32)
+                    .padding(.bottom, appTabBarReservedHeight + 24)
             }
             .appRefreshable {
                 await loadDocuments()
