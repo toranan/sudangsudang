@@ -103,13 +103,16 @@ struct ApprovalView: View {
                                     HStack(spacing: 8) {
                                         Button(action: {
                                             Task { await updateStatus(item, status: "rejected") }
-                                        }) { Text("반려") }
-                                        .buttonStyle(SecondaryButtonStyle(foregroundColor: .appWarning))
-                                        .frame(maxWidth: 120)
+                                        }) {
+                                            decisionLabel("반려", foreground: .appWarning, background: Color.appWarning.opacity(0.12))
+                                        }
+                                        .buttonStyle(PressableRowStyle())
                                         Button(action: {
                                             Task { await updateStatus(item, status: "approved") }
-                                        }) { Text("승인") }
-                                        .buttonStyle(PrimaryButtonStyle())
+                                        }) {
+                                            decisionLabel("승인", foreground: .appOnInk, background: .appInk)
+                                        }
+                                        .buttonStyle(PressableRowStyle())
                                         .disabled(!hasCheckout(item))
                                         .opacity(hasCheckout(item) ? 1.0 : 0.5)
                                     }
@@ -215,11 +218,22 @@ struct ApprovalView: View {
 
     private func workerAvatar(_ item: LogRow) -> some View {
         Text(String(workerDisplayName(item).prefix(1)))
-            .font(.system(size: 15, weight: .bold))
+            .font(.system(size: 13, weight: .bold))
             .foregroundColor(.appAccent)
-            .frame(width: 40, height: 40)
+            .frame(width: 34, height: 34)
             .background(Color.appAccentSoft)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+    }
+
+    // 반려·승인을 반씩 나눠 쓰는 낮은 버튼.
+    private func decisionLabel(_ title: String, foreground: Color, background: Color) -> some View {
+        Text(title)
+            .font(.app(.callout, .semibold))
+            .foregroundColor(foreground)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(background)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
     }
 
     private func statusDot(_ text: String, color: Color) -> some View {
