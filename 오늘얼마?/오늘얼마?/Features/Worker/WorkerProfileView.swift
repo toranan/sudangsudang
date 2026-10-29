@@ -20,17 +20,17 @@ struct WorkerProfileView: View {
                         SectionHeader(title: "내 프로필")
                         VStack(alignment: .leading, spacing: 10) {
                             Text(profileName)
-                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .font(.app(.title, .bold))
                                 .foregroundColor(.appTextPrimary)
 
                             if !profilePhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 Text(profilePhone)
-                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .font(.app(.caption, .medium))
                                     .foregroundColor(.appTextSecondary)
                             }
                             if !profileEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 Text(profileEmail)
-                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .font(.app(.caption, .medium))
                                     .foregroundColor(.appTextSecondary)
                             }
 
@@ -55,7 +55,7 @@ struct WorkerProfileView: View {
 
                     if let loadError {
                         Text(loadError)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appWarning)
                     }
                 }

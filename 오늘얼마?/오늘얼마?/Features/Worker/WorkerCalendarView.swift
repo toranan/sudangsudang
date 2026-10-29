@@ -75,7 +75,7 @@ struct WorkerCalendarView: View {
                         .appCard()
                 } else {
                     Text("등록된 매장이 없어요.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                         .appCard()
                 }
@@ -90,7 +90,7 @@ struct WorkerCalendarView: View {
                         dayDetail(summary: summary)
                     } else {
                         Text("날짜를 선택하면 근무 내역이 보여요.")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                             .appCard()
                     }
@@ -98,7 +98,7 @@ struct WorkerCalendarView: View {
 
                 if let loadError {
                     Text(loadError)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appWarning)
                 }
             }
@@ -139,16 +139,12 @@ struct WorkerCalendarView: View {
                     let isSelected = worker.id == selectedWorkerId
                     Button(action: { selectedWorkerId = worker.id }) {
                         Text(worker.stores?.name ?? "매장")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(isSelected ? .white : .appTextPrimary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(isSelected ? Color.appAccent : Color.appSurface)
                             .cornerRadius(999)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 999)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                     }
                     .buttonStyle(.plain)
                 }
@@ -165,7 +161,7 @@ struct WorkerCalendarView: View {
             .buttonStyle(SecondaryButtonStyle())
 
             Text(monthTitle)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(.app(.body, .semibold))
                 .foregroundColor(.appTextPrimary)
 
             Button(action: { currentMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth }) {
@@ -187,7 +183,7 @@ struct WorkerCalendarView: View {
             HStack {
                 ForEach(["일","월","화","수","목","금","토"], id: \.self) { d in
                     Text(d)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                         .frame(maxWidth: .infinity)
                 }
@@ -201,25 +197,21 @@ struct WorkerCalendarView: View {
                         Button(action: { selectedDate = date }) {
                             VStack(spacing: 4) {
                                 Text("\(calendar.component(.day, from: date))")
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                                     .foregroundColor(isSelected ? .white : .appTextPrimary)
                                 if let summary {
                                     Text(formatWon(summary.totalPay))
-                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                         .foregroundColor(isSelected ? .white.opacity(0.9) : .appTextSecondary)
                                 } else {
                                     Text(" ")
-                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                 }
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
                             .padding(.vertical, 6)
                             .background(isSelected ? Color.appAccent : Color.appSurface)
                             .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                         }
                         .buttonStyle(.plain)
                     } else {
@@ -238,23 +230,17 @@ struct WorkerCalendarView: View {
                 ForEach(summary.rows) { row in
                     HStack {
                         Text(formatRange(start: row.start, end: row.end))
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(.appTextPrimary)
                         Spacer()
                         Text(row.statusText)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(row.statusColor)
                         Text(row.status == "approved" ? formatWon(row.pay) : "미승인")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(.appTextPrimary)
                     }
-                    .padding(12)
-                    .background(Color.appSurface)
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.appLine, lineWidth: 1)
-                    )
+                    .appInputField()
                 }
             }
         }

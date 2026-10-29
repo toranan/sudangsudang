@@ -61,22 +61,22 @@ struct MyHistoryView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("총 근무 시간")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .font(.app(.caption, .semibold))
                                 .foregroundColor(.appTextSecondary)
                             Text(monthWorkedText)
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .font(.app(.title, .bold))
                                 .foregroundColor(.appTextPrimary)
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 6) {
                             Text("세전 예상")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .font(.app(.caption, .semibold))
                                 .foregroundColor(.appTextSecondary)
                             Text(monthPayText)
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .font(.app(.title, .bold))
                                 .foregroundColor(.appTextPrimary)
                             Text("세후 예상 \(monthNetPayText)")
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .font(.app(.caption, .medium))
                                 .foregroundColor(.appTextSecondary)
                         }
                     }
@@ -92,7 +92,7 @@ struct MyHistoryView: View {
                             .appCard()
                     } else if items.isEmpty {
                         Text("근무 기록이 없어요.")
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                             .appCard()
                     } else {
@@ -109,38 +109,34 @@ struct MyHistoryView: View {
                                     VStack(alignment: .leading, spacing: 6) {
                                         HStack(spacing: 8) {
                                             Text(item.storeName)
-                                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                                .font(.app(.caption, .semibold))
                                                 .foregroundColor(.appTextPrimary)
                                             StatusPill(text: item.status, color: item.statusColor)
                                         }
                                         Text("\(item.date) · \(item.time)")
-                                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                                            .font(.app(.caption, .medium))
                                             .foregroundColor(.appTextSecondary)
                                     }
                                     Spacer()
                                     VStack(alignment: .trailing, spacing: 6) {
                                         Text(item.hours)
-                                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                            .font(.app(.caption, .semibold))
                                             .foregroundColor(.appTextPrimary)
                                         Text(item.pay)
-                                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                                            .font(.app(.caption, .medium))
                                             .foregroundColor(.appTextSecondary)
                                     }
                                 }
                                 .padding(12)
-                                .background(Color.appSurface)
-                                .cornerRadius(14)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color.appLine, lineWidth: 1)
-                                )
+                                .background(Color.appFill)
+                                .cornerRadius(12)
                             }
                         }
                     }
 
                     if let loadError {
                         Text(loadError)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appWarning)
                     }
                 }

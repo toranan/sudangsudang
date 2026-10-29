@@ -59,34 +59,28 @@ struct ProfileCompletionSheet: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 14) {
                 Text(context.title)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.app(.headline, .bold))
                     .foregroundColor(.appTextPrimary)
 
                 Text(context.message)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
 
                 VStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("표시 이름")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(.appTextSecondary)
                         TextField("예: 홍길동", text: $name)
                             .textContentType(.name)
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
-                            .padding(12)
-                            .background(Color.appSurface)
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
+                            .appInputField()
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("전화번호")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(.appTextSecondary)
                         TextField("010-1234-5678", text: $phone)
                             .keyboardType(.phonePad)
@@ -97,19 +91,13 @@ struct ProfileCompletionSheet: View {
                                     phone = formatted
                                 }
                             }
-                            .padding(12)
-                            .background(Color.appSurface)
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
+                            .appInputField()
                     }
                 }
 
                 if let errorMessage {
                     Text(errorMessage)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appWarning)
                 }
 

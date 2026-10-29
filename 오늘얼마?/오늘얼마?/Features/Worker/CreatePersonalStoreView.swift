@@ -24,7 +24,7 @@ struct CreatePersonalStoreView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("매장명")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(.appTextSecondary)
                         HStack(spacing: 8) {
                             TextField("매장명", text: $name)
@@ -33,13 +33,7 @@ struct CreatePersonalStoreView: View {
                                 .submitLabel(.search)
                                 .onSubmit { Task { await searchPlaces(manualTrigger: true) } }
                                 .foregroundColor(.appTextPrimary)
-                                .padding(12)
-                                .background(Color.appSurface)
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.appLine, lineWidth: 1)
-                                )
+                                .appInputField()
                             Button("검색") {
                                 Task { await searchPlaces(manualTrigger: true) }
                             }
@@ -50,7 +44,7 @@ struct CreatePersonalStoreView: View {
 
                     if let searchError {
                         Text(searchError)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appWarning)
                     }
 
@@ -69,21 +63,15 @@ struct CreatePersonalStoreView: View {
                                 }) {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(place.placeName)
-                                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                            .font(.app(.callout, .semibold))
                                             .foregroundColor(.appTextPrimary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         Text(place.displayAddress)
-                                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                                            .font(.app(.caption, .medium))
                                             .foregroundColor(.appTextSecondary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
-                                    .padding(12)
-                                    .background(Color.appSurface)
-                                    .cornerRadius(12)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color.appLine, lineWidth: 1)
-                                    )
+                                    .appInputField()
                                 }
                                 .buttonStyle(.plain)
                             }

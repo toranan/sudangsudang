@@ -74,10 +74,10 @@ struct StoreKnowledgeManagementView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("가게 관리")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .font(.app(.largeTitle, .bold))
                     .foregroundColor(.appTextPrimary)
                 Text(storeName)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
                     .lineLimit(1)
             }
@@ -130,7 +130,7 @@ struct StoreKnowledgeManagementView: View {
 
             if let loadMessage {
                 Text(loadMessage)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
@@ -143,7 +143,7 @@ struct StoreKnowledgeManagementView: View {
                     .padding(.horizontal, 20)
             } else if filteredDocuments.isEmpty {
                 Text("등록된 문서가 없어요.")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .font(.app(.callout, .medium))
                     .foregroundColor(.appTextSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .appCard()
@@ -197,16 +197,12 @@ struct StoreKnowledgeManagementView: View {
 
             HStack(spacing: 10) {
                 TextField("메시지 입력", text: $chatInput, axis: .vertical)
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .font(.app(.callout, .medium))
                     .lineLimit(1...4)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                     .background(Color.appSurface)
                     .cornerRadius(16)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.appLine, lineWidth: 1)
-                    )
                     .onSubmit { Task { await askQuestion() } }
 
                 Button(action: { Task { await askQuestion() } }) {
@@ -241,16 +237,15 @@ struct StoreKnowledgeManagementView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 108, height: 108)
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .shadow(color: Color.appAccent.opacity(0.14), radius: 16, x: 0, y: 8)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
             VStack(spacing: 7) {
                 Text("오늘얼마 매뉴얼 챗봇")
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(.app(.headline, .bold))
                     .foregroundColor(.appTextPrimary)
 
                 Text("등록한 공지와 매뉴얼을 기준으로\n직원 질문에 바로 답변해요.")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
@@ -274,26 +269,26 @@ struct StoreKnowledgeManagementView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("제목")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(.appTextSecondary)
                         TextField("예: 포스기 마감 방법", text: $draftTitle)
-                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .font(.app(.body, .medium))
                             .padding(14)
-                            .background(Color.appSurface)
-                            .cornerRadius(14)
+                            .background(Color.appFill)
+                            .cornerRadius(12)
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("내용")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(.appTextSecondary)
                         TextEditor(text: $draftContent)
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .font(.app(.callout, .medium))
                             .frame(minHeight: 260)
                             .padding(10)
                             .scrollContentBackground(.hidden)
-                            .background(Color.appSurface)
-                            .cornerRadius(14)
+                            .background(Color.appFill)
+                            .cornerRadius(12)
                     }
                 }
                 .padding(20)
@@ -345,12 +340,12 @@ struct StoreKnowledgeManagementView: View {
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(spacing: 6) {
                         Text(document.kind.title)
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .font(.app(.caption, .bold))
                             .foregroundColor(document.kind.color)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(document.kind.color.opacity(0.1))
-                            .cornerRadius(7)
+                            .cornerRadius(10)
 
                         Spacer()
 
@@ -387,28 +382,27 @@ struct StoreKnowledgeManagementView: View {
                     }
 
                     Text(document.title)
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .font(.app(.body, .semibold))
                         .foregroundColor(.appTextPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .lineLimit(1)
 
                     Text(document.content.normalizedPreview(limit: 86))
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .lineLimit(2)
 
                     if let dateText = formattedDate(document.updatedAt ?? document.createdAt) {
                         Text(dateText)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                     }
                 }
             }
             .padding(16)
             .background(Color.appSurface)
-            .cornerRadius(18)
-            .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 4)
+            .cornerRadius(16)
         }
         .buttonStyle(.plain)
     }
@@ -419,39 +413,39 @@ struct StoreKnowledgeManagementView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     HStack(spacing: 8) {
                         Label(document.kind.title, systemImage: document.kind.icon)
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .font(.app(.caption, .bold))
                             .foregroundColor(document.kind.color)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(document.kind.color.opacity(0.1))
-                            .cornerRadius(9)
+                            .cornerRadius(10)
 
                         if document.isPinned {
                             Label("상단 고정", systemImage: "pin.fill")
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .font(.app(.caption, .bold))
                                 .foregroundColor(.appAccent)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(Color.appAccent.opacity(0.1))
-                                .cornerRadius(9)
+                                .cornerRadius(10)
                         }
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text(document.title)
-                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .font(.app(.title, .bold))
                             .foregroundColor(.appTextPrimary)
                             .fixedSize(horizontal: false, vertical: true)
 
                         if let dateText = formattedDate(document.updatedAt ?? document.createdAt) {
                             Text(dateText)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .font(.app(.caption, .medium))
                                 .foregroundColor(.appTextSecondary)
                         }
                     }
 
                     Text(document.content)
-                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .font(.app(.callout, .medium))
                         .foregroundColor(.appTextPrimary)
                         .lineSpacing(6)
                         .fixedSize(horizontal: false, vertical: true)
@@ -486,17 +480,17 @@ struct StoreKnowledgeManagementView: View {
             }
 
             Text(message.content)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .font(.app(.callout, .medium))
                 .foregroundColor(message.role == .user ? .white : .appTextPrimary)
                 .lineSpacing(3)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
                 .background(message.role == .user ? Color.appAccent : Color.appSurface)
                 .clipShape(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(message.role == .user ? Color.clear : Color.appLine, lineWidth: 1)
                 )
                 .frame(maxWidth: 280, alignment: message.role == .user ? .trailing : .leading)
@@ -524,11 +518,7 @@ struct StoreKnowledgeManagementView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 13)
                 .background(Color.appSurface)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.appLine, lineWidth: 1)
-                )
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             Spacer(minLength: 54)
         }

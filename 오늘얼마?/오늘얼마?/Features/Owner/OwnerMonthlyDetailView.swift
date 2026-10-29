@@ -48,7 +48,7 @@ struct OwnerMonthlyDetailView: View {
                         .appCard()
                 } else if workers.isEmpty {
                     Text("등록된 알바가 없어요.")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                         .appCard()
                 } else {
@@ -66,7 +66,7 @@ struct OwnerMonthlyDetailView: View {
 
                 if let loadError {
                     Text(loadError)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appWarning)
                 }
             }
@@ -92,16 +92,16 @@ struct OwnerMonthlyDetailView: View {
                 .frame(width: 40, height: 40)
                 .overlay(
                     Text(String(worker.name.prefix(1)))
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .font(.app(.body, .bold))
                         .foregroundColor(.appAccent)
                 )
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(worker.name)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(.app(.callout, .semibold))
                     .foregroundColor(.appTextPrimary)
                 Text("총 \(formatHours(totals.minutes)) · \(formatWon(totals.pay))")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
             }
 
@@ -113,10 +113,6 @@ struct OwnerMonthlyDetailView: View {
         .padding(14)
         .background(Color.appSurface)
         .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.appLine, lineWidth: 1)
-        )
     }
 
     @MainActor

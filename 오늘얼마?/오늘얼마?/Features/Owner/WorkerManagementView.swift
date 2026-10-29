@@ -104,9 +104,9 @@ struct WorkerManagementView: View {
                     }
                     VStack(alignment: .leading, spacing: 12) {
                         Text("알바 초대를 빠르게")
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .font(.app(.body, .semibold))
                         Text("초대코드를 공유해 연결할 수 있어요")
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                         Button(action: {
                             Task { await createInvite() }
@@ -129,7 +129,7 @@ struct WorkerManagementView: View {
                         if let inviteCode {
                             HStack(spacing: 8) {
                                 Text("초대코드: \(inviteCode)")
-                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .font(.app(.body, .bold))
                                     .foregroundColor(.appTextPrimary)
                                 Spacer()
                                 Button(action: {
@@ -158,7 +158,7 @@ struct WorkerManagementView: View {
 
                         if let inviteError {
                             Text(inviteError)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .font(.app(.caption, .medium))
                                 .foregroundColor(.appWarning)
                         }
                     }
@@ -174,7 +174,7 @@ struct WorkerManagementView: View {
                             .appCard()
                     } else if workers.isEmpty {
                         Text("등록된 알바가 없어요.")
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                             .appCard()
                     } else {
@@ -195,21 +195,21 @@ struct WorkerManagementView: View {
                                             .frame(width: 44, height: 44)
                                             .overlay(
                                                 Text(String(worker.name.prefix(1)))
-                                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                                    .font(.app(.body, .bold))
                                                     .foregroundColor(.appTextSecondary)
                                             )
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(worker.name)
-                                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                                .font(.app(.body, .semibold))
                                             if let phone = worker.phone, !phone.isEmpty {
                                                 Text(phone)
-                                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                                    .font(.app(.caption, .medium))
                                                     .foregroundColor(.appTextSecondary)
                                             }
                                             if AppConfig.isWorkerEvaluationEnabled, let summary = evaluationByWorker[worker.id] {
                                                 HStack(spacing: 6) {
                                                     Text(summary.levelTitle)
-                                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                                        .font(.app(.caption, .semibold))
                                                         .foregroundColor(.appTextSecondary)
                                                     if summary.hasSincerityMark {
                                                         StatusPill(text: "성실마크", color: .appPositive)
@@ -220,20 +220,16 @@ struct WorkerManagementView: View {
                                         Spacer()
                                         VStack(alignment: .trailing, spacing: 4) {
                                             Text(formatWon(monthPayByWorker[worker.id] ?? 0))
-                                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                                .font(.app(.caption, .semibold))
                                                 .foregroundColor(.appTextPrimary)
                                             Text(formatHours(monthMinutesByWorker[worker.id] ?? 0))
-                                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                                .font(.app(.caption, .medium))
                                                 .foregroundColor(.appTextSecondary)
                                         }
                                     }
                                     .padding(12)
-                                    .background(Color.appSurface)
-                                    .cornerRadius(14)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 14)
-                                            .stroke(Color.appLine, lineWidth: 1)
-                                    )
+                                    .background(Color.appFill)
+                                    .cornerRadius(12)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -242,7 +238,7 @@ struct WorkerManagementView: View {
 
                     if let workersError {
                         Text(workersError)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appWarning)
                     }
                 }
@@ -301,7 +297,7 @@ struct WorkerManagementView: View {
             }
             Spacer()
             Text(monthTitle(selectedMonth))
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(.app(.callout, .semibold))
                 .foregroundColor(.appTextPrimary)
             Spacer()
             Button(action: {
@@ -312,13 +308,7 @@ struct WorkerManagementView: View {
                     .foregroundColor(.appTextSecondary)
             }
         }
-        .padding(12)
-        .background(Color.appSurface)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.appLine, lineWidth: 1)
-        )
+        .appInputField()
     }
 
     private var storePicker: some View {
@@ -333,16 +323,12 @@ struct WorkerManagementView: View {
                         Task { await loadWorkers(force: false) }
                     }) {
                         Text(store.name)
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(isSelected ? .white : .appTextPrimary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(isSelected ? Color.appAccent : Color.appSurface)
                             .cornerRadius(999)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 999)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                     }
                 }
             }
@@ -1104,7 +1090,7 @@ struct WorkerDetailSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(worker.name)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(.app(.headline, .bold))
                 .foregroundColor(.appTextPrimary)
 
             Picker("", selection: $detailTab) {
@@ -1160,49 +1146,41 @@ struct WorkerDetailSheet: View {
         .sheet(item: $editingLog) { log in
             VStack(alignment: .leading, spacing: 16) {
                 Text("근무 수정")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.app(.headline, .bold))
                     .foregroundColor(.appTextPrimary)
 
                 Text(formatDate(log.check_in_at))
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
 
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("시간")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(.appTextSecondary)
                         TextField("예: 3", text: $editHours)
                             .keyboardType(.numberPad)
                             .foregroundColor(.appTextPrimary)
                             .padding(10)
-                            .background(Color.appSurface)
+                            .background(Color.appFill)
                             .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("분")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(.appTextSecondary)
                         TextField("예: 30", text: $editMinutes)
                             .keyboardType(.numberPad)
                             .foregroundColor(.appTextPrimary)
                             .padding(10)
-                            .background(Color.appSurface)
+                            .background(Color.appFill)
                             .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                     }
                 }
 
                 if let editError {
                     Text(editError)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appWarning)
                 }
 
@@ -1244,31 +1222,31 @@ struct WorkerDetailSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("성장 단계")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(.app(.caption, .semibold))
                     .foregroundColor(.appTextSecondary)
                 Spacer()
                 Text(evaluationSummary?.level.rawValue ?? WorkerGrowthLevel.seedling.rawValue)
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(.app(.callout, .bold))
                     .foregroundColor(.appTextPrimary)
             }
 
             HStack {
                 Text("성실마크")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(.app(.caption, .semibold))
                     .foregroundColor(.appTextSecondary)
                 Spacer()
                 if evaluationSummary?.hasSincerityMark == true {
                     StatusPill(text: "부여됨", color: .appPositive)
                 } else {
                     Text("미부여")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                 }
             }
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("사장 성실도 평가")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(.app(.caption, .semibold))
                     .foregroundColor(.appTextSecondary)
                 HStack(spacing: 8) {
                     ForEach(1...5, id: \.self) { index in
@@ -1278,7 +1256,7 @@ struct WorkerDetailSheet: View {
                     }
                     Spacer()
                     Text("\(ownerRatingInput, specifier: "%.1f")점")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextPrimary)
                 }
                 Slider(value: $ownerRatingInput, in: 1...5, step: 0.5)
@@ -1287,13 +1265,13 @@ struct WorkerDetailSheet: View {
                         ownerRatingInput = clampedHalfStep(value)
                     }
                 Text("4.0점 이상 + 결근/지각 기준 충족 시 성실마크가 부여돼요.")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
             }
 
             if let ratingError {
                 Text(ratingError)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appWarning)
             }
 
@@ -1308,7 +1286,7 @@ struct WorkerDetailSheet: View {
 
             if let retirementError {
                 Text(retirementError)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appWarning)
             }
 
@@ -1328,29 +1306,23 @@ struct WorkerDetailSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("시급 (원)")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(.app(.caption, .semibold))
                     .foregroundColor(.appTextSecondary)
                 TextField("예: 10320", text: $wageInput)
                     .keyboardType(.numberPad)
                     .foregroundColor(.appTextPrimary)
-                    .padding(12)
-                    .background(Color.appSurface)
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.appLine, lineWidth: 1)
-                    )
+                    .appInputField()
                 MinimumWageHint(input: wageInput)
             }
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("세후 설정")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.app(.callout, .semibold))
                     .foregroundColor(.appTextPrimary)
 
                 Toggle(isOn: $applyWeeklyAllowance) {
                     Text("주휴수당 적용")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextPrimary)
                 }
                 .toggleStyle(SwitchToggleStyle(tint: .appAccent))
@@ -1360,7 +1332,7 @@ struct WorkerDetailSheet: View {
 
                 Toggle(isOn: $applyNightAllowance) {
                     Text("야간수당 적용 (22:00~06:00 +50%)")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextPrimary)
                 }
                 .toggleStyle(SwitchToggleStyle(tint: .appAccent))
@@ -1370,7 +1342,7 @@ struct WorkerDetailSheet: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("공제 방식 (택 1)")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                     HStack(spacing: 8) {
                         ForEach(PayrollDeductionType.allCases) { option in
@@ -1379,7 +1351,7 @@ struct WorkerDetailSheet: View {
                                 Task { await savePayrollSettings() }
                             }) {
                                 Text(option.title)
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                                     .foregroundColor(deductionType == option ? .white : .appTextPrimary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 10)
@@ -1397,7 +1369,7 @@ struct WorkerDetailSheet: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("월급일")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                     Picker("월급일", selection: $payday) {
                         ForEach(1...31, id: \.self) { day in
@@ -1412,16 +1384,16 @@ struct WorkerDetailSheet: View {
 
                 if let payrollError {
                     Text(payrollError)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appWarning)
                 }
                 if isSavingPayroll {
                     Text("저장 중...")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                 } else {
                     Text("세후금액 탭에서 예상 세후 금액을 확인할 수 있어요.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                 }
             }
@@ -1429,7 +1401,7 @@ struct WorkerDetailSheet: View {
 
             if let wageError {
                 Text(wageError)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appWarning)
             }
 
@@ -1456,13 +1428,13 @@ struct WorkerDetailSheet: View {
         return VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("이번 달 세후 예상")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(.app(.caption, .semibold))
                     .foregroundColor(.appTextSecondary)
                 Text(formatWon(net))
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .font(.app(.largeTitle, .bold))
                     .foregroundColor(.appTextPrimary)
                 Text("공제/주휴는 설정에 따라 달라지는 예상치예요.")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
             }
             .appCard()
@@ -1490,11 +1462,11 @@ struct WorkerDetailSheet: View {
     private func row(title: String, value: String, emphasized: Bool = false) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .font(.app(.caption, .medium))
                 .foregroundColor(.appTextSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: 13, weight: emphasized ? .semibold : .medium, design: .rounded))
+                .font(.app(.caption, emphasized ? .semibold : .medium))
                 .foregroundColor(.appTextPrimary)
         }
     }
@@ -1503,15 +1475,15 @@ struct WorkerDetailSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("이번 달 지급액")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(.app(.caption, .semibold))
                     .foregroundColor(.appTextSecondary)
                 HStack(alignment: .bottom) {
                     Text(formatWon(monthGrossPay(wage: effectiveHourlyWage())))
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .font(.app(.title, .bold))
                         .foregroundColor(.appTextPrimary)
                     Spacer()
                     Text(formatHours(totalMinutes()))
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                 }
             }
@@ -1519,7 +1491,7 @@ struct WorkerDetailSheet: View {
 
             if monthLogs.isEmpty {
                 Text("이번 달 근무 내역이 없어요.")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
                     .appCard()
             } else {
@@ -1528,7 +1500,7 @@ struct WorkerDetailSheet: View {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Text(formatDate(log.check_in_at))
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                                 Spacer()
                                 Menu {
                                     Button("수정") {
@@ -1551,24 +1523,18 @@ struct WorkerDetailSheet: View {
                                 }
                             }
                             Text(formatTimeRange(log))
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .font(.app(.caption, .medium))
                                 .foregroundColor(.appTextSecondary)
                             HStack {
                                 Text(formatHours(calcMinutes(checkIn: log.check_in_at, checkOut: log.check_out_at)))
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .font(.app(.caption, .medium))
                                     .foregroundColor(.appTextSecondary)
                                 Spacer()
                                 Text(formatWon(logGrossPay(log, wage: effectiveHourlyWage())))
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                             }
                         }
-                        .padding(12)
-                        .background(Color.appSurface)
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.appLine, lineWidth: 1)
-                        )
+                        .appInputField()
                     }
                 }
             }
@@ -1581,13 +1547,13 @@ struct WorkerDetailSheet: View {
     private var manualAddView: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("근무 추가")
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .font(.app(.body, .bold))
                 .foregroundColor(.appTextPrimary)
 
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("출근 시간")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                     HStack(spacing: 8) {
                         TextField("시", text: $startHourInput)
@@ -1595,31 +1561,23 @@ struct WorkerDetailSheet: View {
                             .foregroundColor(.appTextPrimary)
                             .multilineTextAlignment(.center)
                             .padding(10)
-                            .background(Color.appSurface)
+                            .background(Color.appFill)
                             .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                         Text(":")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .font(.app(.callout, .bold))
                             .foregroundColor(.appTextSecondary)
                         TextField("분", text: $startMinuteInput)
                             .keyboardType(.numberPad)
                             .foregroundColor(.appTextPrimary)
                             .multilineTextAlignment(.center)
                             .padding(10)
-                            .background(Color.appSurface)
+                            .background(Color.appFill)
                             .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                     }
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text("퇴근 시간")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                     HStack(spacing: 8) {
                         TextField("시", text: $endHourInput)
@@ -1627,37 +1585,29 @@ struct WorkerDetailSheet: View {
                             .foregroundColor(.appTextPrimary)
                             .multilineTextAlignment(.center)
                             .padding(10)
-                            .background(Color.appSurface)
+                            .background(Color.appFill)
                             .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                         Text(":")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .font(.app(.callout, .bold))
                             .foregroundColor(.appTextSecondary)
                         TextField("분", text: $endMinuteInput)
                             .keyboardType(.numberPad)
                             .foregroundColor(.appTextPrimary)
                             .multilineTextAlignment(.center)
                             .padding(10)
-                            .background(Color.appSurface)
+                            .background(Color.appFill)
                             .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                     }
                 }
             }
 
             Text("퇴근이 출근보다 빠르면 다음날 퇴근으로 계산돼요.")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.app(.caption, .medium))
                 .foregroundColor(.appTextSecondary)
 
             if let manualError {
                 Text(manualError)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appWarning)
             }
 

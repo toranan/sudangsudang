@@ -18,28 +18,22 @@ struct JoinStoreView: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
                 Text("초대코드 입력하기")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.app(.headline, .bold))
                     .foregroundColor(.appTextPrimary)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("초대코드")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                     TextField("사장님이 보내준 초대코드를 입력", text: $token)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .padding(12)
-                        .background(Color.appSurface)
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.appLine, lineWidth: 1)
-                        )
+                        .appInputField()
                 }
 
                 if let error {
                     Text(error)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appWarning)
                 }
 

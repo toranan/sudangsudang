@@ -71,7 +71,7 @@ struct StatsView: View {
                         .appCard()
                 } else {
                     Text("등록된 매장이 없어요.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                         .appCard()
                 }
@@ -85,7 +85,7 @@ struct StatsView: View {
                         dayDetail(summary: summary)
                     } else {
                         Text("날짜를 선택하면 근무 내역이 보여요.")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                             .appCard()
                     }
@@ -93,7 +93,7 @@ struct StatsView: View {
 
                 if let loadError {
                     Text(loadError)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appWarning)
                 }
             }
@@ -128,16 +128,12 @@ struct StatsView: View {
                     let isSelected = store.id == selectedStoreId
                     Button(action: { selectedStoreId = store.id }) {
                         Text(store.name)
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(isSelected ? .white : .appTextPrimary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(isSelected ? Color.appAccent : Color.appSurface)
                             .cornerRadius(999)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 999)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                     }
                 }
             }
@@ -153,7 +149,7 @@ struct StatsView: View {
             .buttonStyle(SecondaryButtonStyle())
 
             Text(monthTitle)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(.app(.body, .semibold))
                 .foregroundColor(.appTextPrimary)
 
             Button(action: { currentMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth }) {
@@ -175,7 +171,7 @@ struct StatsView: View {
             HStack {
                 ForEach(["일","월","화","수","목","금","토"], id: \.self) { d in
                     Text(d)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                         .frame(maxWidth: .infinity)
                 }
@@ -191,25 +187,21 @@ struct StatsView: View {
                         }) {
                             VStack(spacing: 4) {
                                 Text("\(calendar.component(.day, from: date))")
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                                     .foregroundColor(isSelected ? .white : .appTextPrimary)
                                 if let summary {
                                     Text(formatWon(summary.totalPay))
-                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                         .foregroundColor(isSelected ? .white.opacity(0.9) : .appTextSecondary)
                                 } else {
                                     Text(" ")
-                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                 }
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
                             .padding(.vertical, 6)
                             .background(isSelected ? Color.appAccent : Color.appSurface)
                             .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                         }
                         .buttonStyle(.plain)
                     } else {
@@ -228,21 +220,15 @@ struct StatsView: View {
                 ForEach(summary.rows) { row in
                     HStack {
                         Text(row.name)
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(.app(.callout, .semibold))
                         Spacer()
                         Text("\(formatHours(row.minutes))")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                         Text(formatWon(row.pay))
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                     }
-                    .padding(12)
-                    .background(Color.appSurface)
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.appLine, lineWidth: 1)
-                    )
+                    .appInputField()
                 }
             }
         }

@@ -49,24 +49,24 @@ struct WorkerCheckInView: View {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("오늘 근무")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(.app(.callout, .semibold))
                             .foregroundColor(.appTextPrimary)
                         HStack {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("근무 시간")
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                                     .foregroundColor(.appTextSecondary)
                                 Text(formatHours(displayMinutes))
-                                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    .font(.app(.title, .bold))
                                     .foregroundColor(.appTextPrimary)
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 6) {
                                 Text("예상 급여")
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                                     .foregroundColor(.appTextSecondary)
                                 Text(formatWon(displayPay))
-                                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    .font(.app(.title, .bold))
                                     .foregroundColor(.appTextPrimary)
                             }
                         }
@@ -75,27 +75,27 @@ struct WorkerCheckInView: View {
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text("이번 달 요약")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(.app(.callout, .semibold))
                             .foregroundColor(.appTextPrimary)
                         HStack {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("총 근무 시간")
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                                     .foregroundColor(.appTextSecondary)
                                 Text(store.monthWorkedText)
-                                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                                    .font(.app(.title, .bold))
                                     .foregroundColor(.appTextPrimary)
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 6) {
                                 Text("세전 예상")
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                                     .foregroundColor(.appTextSecondary)
                                 Text(store.monthPayText)
-                                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                                    .font(.app(.title, .bold))
                                     .foregroundColor(.appTextPrimary)
                                 Text("세후 예상 \(monthNetPayText())")
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .font(.app(.caption, .medium))
                                     .foregroundColor(.appTextSecondary)
                             }
                         }
@@ -127,7 +127,7 @@ struct WorkerCheckInView: View {
                                 Image(systemName: "mappin.circle.fill")
                                 .foregroundColor(.appTextSecondary)
                                 Text(isCheckedIn ? "\(store.name)에서 근무 중" : "\(store.name) 출근 대기")
-                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .font(.app(.caption, .medium))
                                     .foregroundColor(.appTextSecondary)
                                 Spacer()
                             }
@@ -135,7 +135,7 @@ struct WorkerCheckInView: View {
                         }
                         if let actionError {
                             Text(actionError)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .font(.app(.caption, .medium))
                                 .foregroundColor(.appWarning)
                         }
                     }
@@ -152,7 +152,7 @@ struct WorkerCheckInView: View {
                             if store.isPersonal {
                                 Toggle(isOn: $applyWeeklyAllowance) {
                                     Text("주휴수당 적용")
-                                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextPrimary)
                                 }
                                 .toggleStyle(SwitchToggleStyle(tint: .appAccent))
@@ -162,7 +162,7 @@ struct WorkerCheckInView: View {
 
                                 Toggle(isOn: $applyNightAllowance) {
                                     Text("야간수당 적용 (22:00~06:00 +50%)")
-                                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextPrimary)
                                 }
                                 .toggleStyle(SwitchToggleStyle(tint: .appAccent))
@@ -172,7 +172,7 @@ struct WorkerCheckInView: View {
 
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("공제 방식 (택 1)")
-                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                         .foregroundColor(.appTextSecondary)
                                     HStack(spacing: 8) {
                                         ForEach(PayrollDeductionType.allCases) { option in
@@ -181,7 +181,7 @@ struct WorkerCheckInView: View {
                                                 persistLocalPayrollSettings()
                                             }) {
                                                 Text(option.title)
-                                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                                    .font(.app(.caption, .semibold))
                                                     .foregroundColor(deductionType == option ? .white : .appTextPrimary)
                                                     .frame(maxWidth: .infinity)
                                                     .padding(.vertical, 10)
@@ -199,7 +199,7 @@ struct WorkerCheckInView: View {
 
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("월급일")
-                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                         .foregroundColor(.appTextSecondary)
                                     Picker("월급일", selection: $payday) {
                                         ForEach(1...31, id: \.self) { day in
@@ -214,43 +214,43 @@ struct WorkerCheckInView: View {
 
                                 HStack {
                                     Text("정산기간")
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextSecondary)
                                     Spacer()
                                     Text("매월 1일 ~ 말일")
-                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                         .foregroundColor(.appTextSecondary)
                                 }
 
                                 Text("다음 월급일 \(nextPaydayDateText())")
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .font(.app(.caption, .medium))
                                     .foregroundColor(.appTextSecondary)
 
                                 Text("개인 매장의 세부 설정은 이 기기에서만 저장돼요.")
-                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .font(.app(.caption, .medium))
                                     .foregroundColor(.appTextSecondary)
                             } else {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("사장님이 설정한 기준이 적용돼요.")
-                                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                         .foregroundColor(.appTextPrimary)
                                     Text("공제 방식: \(store.deductionType.title)")
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextSecondary)
                                     Text("주휴수당: \(store.applyWeeklyAllowance ? "적용" : "미적용")")
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextSecondary)
                                     Text("야간수당: \(store.applyNightAllowance ? "적용" : "미적용")")
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextSecondary)
                                     Text("월급일: 매월 \(store.paydayText)")
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextSecondary)
                                     Text("정산기간: 매월 1일 ~ 말일")
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextSecondary)
                                     Text("다음 월급일 \(nextPaydayDateText())")
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextSecondary)
                                 }
                             }
@@ -317,23 +317,17 @@ struct WorkerCheckInView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("내역 보기")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(.app(.callout, .semibold))
                             .foregroundColor(.appTextPrimary)
                         Text("전체 근무 내역을 화면에서 길게 확인할 수 있어요.")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
                         .foregroundColor(.appTextSecondary)
                 }
-                .padding(12)
-                .background(Color.appSurface)
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.appLine, lineWidth: 1)
-                )
+                .appInputField()
             }
             .buttonStyle(.plain)
         }
@@ -362,25 +356,25 @@ struct WorkerCheckInView: View {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("출근 시간")
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                                     .foregroundColor(.appTextSecondary)
                                 timeInputRow(hour: $startHourInput, minute: $startMinuteInput)
                             }
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("퇴근 시간")
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                                     .foregroundColor(.appTextSecondary)
                                 timeInputRow(hour: $endHourInput, minute: $endMinuteInput)
                             }
                         }
 
                         Text("종료가 출근보다 빠르면 다음날 퇴근으로 계산돼요.")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
 
                         if let manualError {
                             Text(manualError)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .font(.app(.caption, .medium))
                                 .foregroundColor(.appWarning)
                         }
 
@@ -398,7 +392,7 @@ struct WorkerCheckInView: View {
                 }
             } else {
                 Text("사장님과 연동된 근무는 직접 추가할 수 없어요.")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
                     .appCard()
             }
@@ -412,7 +406,7 @@ struct WorkerCheckInView: View {
             VStack(alignment: .leading, spacing: 10) {
                 if fixedSchedules.isEmpty {
                     Text("아직 등록된 고정 스케줄이 없어요.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                 } else {
                     VStack(spacing: 8) {
@@ -420,22 +414,22 @@ struct WorkerCheckInView: View {
                             HStack(spacing: 10) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("\(weekdayLabel(schedule.weekday))요일")
-                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                         .foregroundColor(.appTextPrimary)
                                     Text("\(formatHourMinute(schedule.startHour, schedule.startMinute)) - \(formatHourMinute(schedule.endHour, schedule.endMinute))")
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextSecondary)
                                 }
                                 Spacer()
                                 Button("적용") {
                                     applyFixedScheduleToManualInput(schedule)
                                 }
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .font(.app(.caption, .semibold))
                                 .foregroundColor(.appAccent)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 6)
                                 .background(Color.appAccent.opacity(0.1))
-                                .cornerRadius(8)
+                                .cornerRadius(10)
 
                                 Button(role: .destructive) {
                                     removeFixedSchedule(schedule)
@@ -446,12 +440,8 @@ struct WorkerCheckInView: View {
                                 }
                             }
                             .padding(10)
-                            .background(Color.appSurface)
+                            .background(Color.appFill)
                             .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                         }
                     }
                 }
@@ -484,13 +474,13 @@ struct WorkerCheckInView: View {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("출근 시간")
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .font(.app(.caption, .semibold))
                                 .foregroundColor(.appTextSecondary)
                             timeInputRow(hour: $fixedStartHourInput, minute: $fixedStartMinuteInput)
                         }
                         VStack(alignment: .leading, spacing: 6) {
                             Text("퇴근 시간")
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .font(.app(.caption, .semibold))
                                 .foregroundColor(.appTextSecondary)
                             timeInputRow(hour: $fixedEndHourInput, minute: $fixedEndMinuteInput)
                         }
@@ -498,7 +488,7 @@ struct WorkerCheckInView: View {
 
                     if let fixedScheduleError {
                         Text(fixedScheduleError)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appWarning)
                     }
 
@@ -649,26 +639,18 @@ private extension WorkerCheckInView {
                 .foregroundColor(.appTextPrimary)
                 .multilineTextAlignment(.center)
                 .padding(10)
-                .background(Color.appSurface)
+                .background(Color.appFill)
                 .cornerRadius(10)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.appLine, lineWidth: 1)
-                )
             Text(":")
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .font(.app(.callout, .bold))
                 .foregroundColor(.appTextSecondary)
             TextField("분", text: minute)
                 .keyboardType(.numberPad)
                 .foregroundColor(.appTextPrimary)
                 .multilineTextAlignment(.center)
                 .padding(10)
-                .background(Color.appSurface)
+                .background(Color.appFill)
                 .cornerRadius(10)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.appLine, lineWidth: 1)
-                )
         }
     }
 
@@ -1276,7 +1258,7 @@ private struct WorkerStoreHistoryView: View {
                         .appCard()
                 } else if logs.isEmpty {
                     Text("근무 내역이 없어요.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                         .appCard()
                 } else {
@@ -1285,38 +1267,32 @@ private struct WorkerStoreHistoryView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack {
                                     Text(formatDate(log.check_in_at))
-                                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                         .foregroundColor(.appTextPrimary)
                                     Spacer()
                                     StatusPill(text: statusLabel(log.status), color: statusColor(log.status))
                                 }
                                 Text(formatTimeRange(log))
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .font(.app(.caption, .medium))
                                     .foregroundColor(.appTextSecondary)
                                 HStack {
                                     Text(formatHours(totalMinutes(log)))
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextSecondary)
                                     Spacer()
                                     Text(formatWon(totalPay(log)))
-                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                         .foregroundColor(.appTextPrimary)
                                 }
                             }
-                            .padding(12)
-                            .background(Color.appSurface)
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
+                            .appInputField()
                         }
                     }
                 }
 
                 if let loadError {
                     Text(loadError)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appWarning)
                 }
             }

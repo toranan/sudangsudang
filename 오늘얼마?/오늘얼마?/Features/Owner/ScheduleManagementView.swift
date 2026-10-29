@@ -128,7 +128,7 @@ struct ScheduleManagementView: View {
 
                 if let loadError {
                     Text(loadError)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appWarning)
                 }
             }
@@ -196,16 +196,12 @@ struct ScheduleManagementView: View {
                     let isSelected = store.id == selectedStoreId
                     Button(action: { selectedStoreId = store.id }) {
                         Text(store.name)
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(isSelected ? .white : .appTextPrimary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(isSelected ? Color.appAccent : Color.appSurface)
                             .cornerRadius(999)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 999)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                     }
                     .buttonStyle(.plain)
                 }
@@ -217,7 +213,7 @@ struct ScheduleManagementView: View {
     private var templateSection: some View {
         HStack(spacing: 12) {
             Text("주간 설정")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(.app(.body, .semibold))
                 .foregroundColor(.appTextPrimary)
 
             Spacer()
@@ -225,16 +221,12 @@ struct ScheduleManagementView: View {
             Button("설정하기") {
                 isPresentingTemplateManager = true
             }
-            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .font(.app(.caption, .semibold))
             .foregroundColor(.appAccent)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color.appSurface)
+            .background(Color.appFill)
             .cornerRadius(999)
-            .overlay(
-                RoundedRectangle(cornerRadius: 999)
-                    .stroke(Color.appLine, lineWidth: 1)
-            )
         }
         .appCard()
     }
@@ -249,7 +241,7 @@ struct ScheduleManagementView: View {
             .buttonStyle(SecondaryButtonStyle())
 
             Text(monthTitle)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(.app(.body, .semibold))
                 .foregroundColor(.appTextPrimary)
 
             Button(action: {
@@ -275,7 +267,7 @@ struct ScheduleManagementView: View {
             HStack {
                 ForEach(["일", "월", "화", "수", "목", "금", "토"], id: \.self) { day in
                     Text(day)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                         .frame(maxWidth: .infinity)
                 }
@@ -292,25 +284,21 @@ struct ScheduleManagementView: View {
                         }) {
                             VStack(spacing: 4) {
                                 Text("\(calendar.component(.day, from: date))")
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                                     .foregroundColor(isSelected ? .white : .appTextPrimary)
                                 if count > 0 {
                                     Text("\(count)명")
-                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                         .foregroundColor(isSelected ? .white.opacity(0.9) : .appTextSecondary)
                                 } else {
                                     Text(" ")
-                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                        .font(.app(.caption, .semibold))
                                 }
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
                             .padding(.vertical, 6)
                             .background(isSelected ? Color.appAccent : Color.appSurface)
                             .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                         }
                         .buttonStyle(.plain)
                     } else {
@@ -332,7 +320,7 @@ struct ScheduleManagementView: View {
                 let dayEntries = entriesForDay(selectedDate)
                 if dayEntries.isEmpty {
                     Text("등록된 근무가 없어요.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                         .appCard()
                 } else {
@@ -344,10 +332,10 @@ struct ScheduleManagementView: View {
                                 HStack(spacing: 10) {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(entry.workers?.name ?? workerName(entry.worker_id))
-                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                            .font(.app(.callout, .semibold))
                                             .foregroundColor(.appTextPrimary)
                                         Text(formatTimeRange(start: entry.check_in_time, end: entry.check_out_time))
-                                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                                            .font(.app(.caption, .medium))
                                             .foregroundColor(.appTextSecondary)
                                     }
 
@@ -358,13 +346,7 @@ struct ScheduleManagementView: View {
                                         color: entry.source == "template" ? .appAccent : .appTextSecondary
                                     )
                                 }
-                                .padding(12)
-                                .background(Color.appSurface)
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.appLine, lineWidth: 1)
-                                )
+                                .appInputField()
                             }
                             .buttonStyle(.plain)
                         }
@@ -373,7 +355,7 @@ struct ScheduleManagementView: View {
                 }
             } else {
                 Text("날짜를 선택하면 해당 일자의 근무자를 볼 수 있어요.")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
                     .appCard()
             }
@@ -1031,7 +1013,7 @@ private struct TemplateManagementSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     if templates.isEmpty {
                         Text("주간 설정이 없어요. 추가하면 자동으로 스케줄이 생성돼요.")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                             .appCard()
                     } else {
@@ -1042,11 +1024,11 @@ private struct TemplateManagementSheet: View {
                                 VStack(alignment: .leading, spacing: 10) {
                                     HStack(spacing: 8) {
                                         Text("\(weekdayLabel(weekday))요일")
-                                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                                            .font(.app(.callout, .bold))
                                             .foregroundColor(.appTextPrimary)
 
                                         Text("\(dayTemplates.count)건")
-                                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                            .font(.app(.caption, .semibold))
                                             .foregroundColor(.appAccent)
                                             .padding(.horizontal, 8)
                                             .padding(.vertical, 4)
@@ -1104,10 +1086,10 @@ private struct TemplateManagementSheet: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(template.workers?.name ?? workerName(template.worker_id))
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.app(.callout, .semibold))
                     .foregroundColor(.appTextPrimary)
                 Text(formatTimeRange(template.check_in_time, template.check_out_time))
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
             }
 
@@ -1126,13 +1108,7 @@ private struct TemplateManagementSheet: View {
                     .padding(6)
             }
         }
-        .padding(12)
-        .background(Color.appSurface)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.appLine, lineWidth: 1)
-        )
+        .appInputField()
     }
 
     private var sortedWeekdays: [Int] {
@@ -1181,7 +1157,7 @@ private struct TemplateEditorSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("요일")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(.app(.callout, .semibold))
                             .foregroundColor(.appTextPrimary)
 
                         Picker("요일", selection: $weekday) {
@@ -1201,7 +1177,7 @@ private struct TemplateEditorSheet: View {
 
                     if let error {
                         Text(error)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appWarning)
                     }
 
@@ -1234,17 +1210,17 @@ private struct TemplateEditorSheet: View {
     private var timeInputSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("시간")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(.app(.callout, .semibold))
                 .foregroundColor(.appTextPrimary)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("근무자")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
 
                 if workers.isEmpty {
                     Text("등록된 알바가 없어요. 먼저 알바관리에서 알바를 등록해주세요.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                 } else {
                     Picker("근무자", selection: Binding(
@@ -1262,21 +1238,21 @@ private struct TemplateEditorSheet: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("출근 시간 (필수)")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                     timeField(hour: $startHour, minute: $startMinute)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("퇴근 시간 (선택)")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                     timeField(hour: $endHour, minute: $endMinute)
                 }
             }
 
             Text("퇴근 시간은 비워둘 수 있어요.")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.app(.caption, .medium))
                 .foregroundColor(.appTextSecondary)
         }
         .appCard()
@@ -1289,26 +1265,18 @@ private struct TemplateEditorSheet: View {
                 .multilineTextAlignment(.center)
                 .foregroundColor(.appTextPrimary)
                 .padding(10)
-                .background(Color.appSurface)
+                .background(Color.appFill)
                 .cornerRadius(10)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.appLine, lineWidth: 1)
-                )
             Text(":")
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .font(.app(.callout, .bold))
                 .foregroundColor(.appTextSecondary)
             TextField("분", text: minute)
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.center)
                 .foregroundColor(.appTextPrimary)
                 .padding(10)
-                .background(Color.appSurface)
+                .background(Color.appFill)
                 .cornerRadius(10)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.appLine, lineWidth: 1)
-                )
         }
     }
 
@@ -1415,10 +1383,10 @@ private struct ScheduleEntryEditorSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("근무 일자")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(.app(.callout, .semibold))
                             .foregroundColor(.appTextPrimary)
                         Text(dayTitle)
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .font(.app(.body, .bold))
                             .foregroundColor(.appTextPrimary)
                     }
                     .appCard()
@@ -1427,7 +1395,7 @@ private struct ScheduleEntryEditorSheet: View {
 
                     if let error {
                         Text(error)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appWarning)
                     }
 
@@ -1465,17 +1433,17 @@ private struct ScheduleEntryEditorSheet: View {
     private var timeInputSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("시간")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(.app(.callout, .semibold))
                 .foregroundColor(.appTextPrimary)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("근무자")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
 
                 if workers.isEmpty {
                     Text("등록된 알바가 없어요. 먼저 알바관리에서 알바를 등록해주세요.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                 } else {
                     Picker("근무자", selection: Binding(
@@ -1493,21 +1461,21 @@ private struct ScheduleEntryEditorSheet: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("출근 시간 (필수)")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                     timeField(hour: $startHour, minute: $startMinute)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("퇴근 시간 (선택)")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                     timeField(hour: $endHour, minute: $endMinute)
                 }
             }
 
             Text("퇴근 시간은 비워둘 수 있어요.")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.app(.caption, .medium))
                 .foregroundColor(.appTextSecondary)
         }
         .appCard()
@@ -1520,26 +1488,18 @@ private struct ScheduleEntryEditorSheet: View {
                 .multilineTextAlignment(.center)
                 .foregroundColor(.appTextPrimary)
                 .padding(10)
-                .background(Color.appSurface)
+                .background(Color.appFill)
                 .cornerRadius(10)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.appLine, lineWidth: 1)
-                )
             Text(":")
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .font(.app(.callout, .bold))
                 .foregroundColor(.appTextSecondary)
             TextField("분", text: minute)
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.center)
                 .foregroundColor(.appTextPrimary)
                 .padding(10)
-                .background(Color.appSurface)
+                .background(Color.appFill)
                 .cornerRadius(10)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.appLine, lineWidth: 1)
-                )
         }
     }
 

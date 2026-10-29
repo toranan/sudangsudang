@@ -16,16 +16,15 @@ struct AuthBrandView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 160, height: 160)
-                .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
                 .padding(.bottom, 20)
 
             VStack(spacing: 12) {
                 Text("사장님, 알바생 모두")
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .font(.app(.headline, .semibold))
                     .foregroundColor(.appTextSecondary)
 
                 Text("간편하게 수당수당")
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .font(.app(.largeTitle, .bold))
                     .foregroundColor(.appTextPrimary)
             }
             .multilineTextAlignment(.center)
@@ -83,7 +82,7 @@ struct AuthView: View {
     private var roleStep: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("어떤 회원으로 가입하시겠어요?")
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(.app(.headline, .bold))
                 .foregroundColor(.appTextPrimary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.bottom, 10)
@@ -94,10 +93,10 @@ struct AuthView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("사장님이에요")
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .font(.app(.body, .bold))
                             .foregroundColor(.appTextPrimary)
                         Text("매장 관리와 근무 승인을 해요")
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                     }
                     Spacer()
@@ -108,7 +107,6 @@ struct AuthView: View {
                 .padding(20)
                 .background(Color.appSurface)
                 .cornerRadius(20)
-                .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
             }
             .buttonStyle(ScaleButtonStyle())
 
@@ -118,10 +116,10 @@ struct AuthView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("아르바이트생이에요")
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .font(.app(.body, .bold))
                             .foregroundColor(.appTextPrimary)
                         Text("출퇴근 기록과 급여를 확인해요")
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                     }
                     Spacer()
@@ -132,7 +130,6 @@ struct AuthView: View {
                 .padding(20)
                 .background(Color.appSurface)
                 .cornerRadius(20)
-                .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
             }
             .buttonStyle(ScaleButtonStyle())
 
@@ -140,7 +137,7 @@ struct AuthView: View {
                 step = .apple
             }) {
                 Text("이전으로")
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .font(.app(.callout, .medium))
                     .foregroundColor(.appTextSecondary)
                     .padding(.top, 10)
             }
@@ -162,7 +159,7 @@ struct AuthView: View {
                     Image(systemName: "message.fill")
                         .font(.system(size: 18))
                     Text("카카오톡으로 시작하기")
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .font(.app(.body, .semibold))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)

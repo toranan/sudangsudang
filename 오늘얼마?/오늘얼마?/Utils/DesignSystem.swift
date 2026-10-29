@@ -30,6 +30,43 @@ enum Haptics {
     }
 }
 
+// 글자 크기 단계. 화면에서는 .font(.app(.body, .semibold))처럼 쓴다.
+enum AppTextStyle {
+    case caption     // 13 보조 설명, 라벨
+    case callout     // 15 본문 보조, 목록 값
+    case body        // 17 본문, 버튼
+    case headline    // 20 섹션 제목
+    case title       // 24 화면 제목
+    case largeTitle  // 28 강조 숫자
+    case display     // 34 대표 숫자 (급여 등)
+
+    var size: CGFloat {
+        switch self {
+        case .caption: return 13
+        case .callout: return 15
+        case .body: return 17
+        case .headline: return 20
+        case .title: return 24
+        case .largeTitle: return 28
+        case .display: return 34
+        }
+    }
+}
+
+extension Font {
+    static func app(_ style: AppTextStyle, _ weight: Font.Weight = .regular) -> Font {
+        .system(size: style.size, weight: weight)
+    }
+}
+
+// 모서리 단계: 작은 칩 10, 입력칸·작은 카드 12, 버튼 16, 카드 20.
+enum AppRadius {
+    static let chip: CGFloat = 10
+    static let field: CGFloat = 12
+    static let button: CGFloat = 16
+    static let card: CGFloat = 20
+}
+
 // Toss-like Color System (clean + friendly)
 extension Color {
     #if canImport(UIKit)
@@ -46,19 +83,24 @@ extension Color {
         dark: UIColor(red: 78/255, green: 139/255, blue: 255/255, alpha: 1)
     )
     static let appBackground = dynamic(
-        light: UIColor(red: 247/255, green: 248/255, blue: 250/255, alpha: 1),
-        dark: UIColor(red: 18/255, green: 20/255, blue: 24/255, alpha: 1)
+        light: UIColor(red: 242/255, green: 244/255, blue: 246/255, alpha: 1),
+        dark: UIColor(red: 16/255, green: 17/255, blue: 20/255, alpha: 1)
+    )
+    // 카드 안의 입력칸, 보조 버튼 같은 채움 면.
+    static let appFill = dynamic(
+        light: UIColor(red: 242/255, green: 244/255, blue: 246/255, alpha: 1),
+        dark: UIColor(red: 44/255, green: 47/255, blue: 53/255, alpha: 1)
     )
     static let appSurface = dynamic(
         light: UIColor(red: 1, green: 1, blue: 1, alpha: 1),
         dark: UIColor(red: 28/255, green: 31/255, blue: 36/255, alpha: 1)
     )
     static let appTextPrimary = dynamic(
-        light: UIColor(red: 27/255, green: 29/255, blue: 33/255, alpha: 1),
+        light: UIColor(red: 25/255, green: 31/255, blue: 40/255, alpha: 1),
         dark: UIColor(red: 242/255, green: 244/255, blue: 247/255, alpha: 1)
     )
     static let appTextSecondary = dynamic(
-        light: UIColor(red: 107/255, green: 114/255, blue: 128/255, alpha: 1),
+        light: UIColor(red: 107/255, green: 118/255, blue: 132/255, alpha: 1),
         dark: UIColor(red: 155/255, green: 163/255, blue: 176/255, alpha: 1)
     )
     static let appLine = dynamic(
@@ -75,7 +117,8 @@ extension Color {
     )
     #else
     static let appAccent = Color(red: 30/255, green: 104/255, blue: 255/255)
-    static let appBackground = Color(red: 247/255, green: 248/255, blue: 250/255)
+    static let appBackground = Color(red: 242/255, green: 244/255, blue: 246/255)
+    static let appFill = Color(red: 242/255, green: 244/255, blue: 246/255)
     static let appSurface = Color.white
     static let appTextPrimary = Color(red: 27/255, green: 29/255, blue: 33/255)
     static let appTextSecondary = Color(red: 107/255, green: 114/255, blue: 128/255)
@@ -97,14 +140,39 @@ struct PrimaryButtonStyle: ButtonStyle {
     var foregroundColor: Color = .white
 
     func makeBody(configuration: Configuration) -> some View {
+        PressableLabel(configuration: configuration) {
+            configuration.label
+                .font(.app(.body, .semibold))
+                .foregroundColor(foregroundColor)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity)
+                .background(backgroundColor)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
+        }
+    }
+}
+
+// 눌렀을 때 살짝 작아지고 옅어지는 공통 피드백. 비활성 상태는 흐리게.
+private struct PressableLabel<Content: View>: View {
+    let configuration: ButtonStyleConfiguration
+    @ViewBuilder let content: Content
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        content
+            .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1.0) : 0.4)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: configuration.isPressed)
+    }
+}
+
+// 카드나 목록 행처럼 큰 영역을 누를 때 쓰는 피드백 (.plain 대신).
+struct PressableRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 16, weight: .semibold, design: .rounded))
-            .foregroundColor(foregroundColor)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity)
-            .background(backgroundColor)
-            .cornerRadius(16)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.7 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.99 : 1.0)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
@@ -124,19 +192,15 @@ struct SecondaryButtonStyle: ButtonStyle {
     var foregroundColor: Color = .appAccent
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 16, weight: .semibold, design: .rounded))
-            .foregroundColor(foregroundColor)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity)
-            .background(Color.appSurface)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.appLine, lineWidth: 1)
-            )
-            .cornerRadius(16)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+        PressableLabel(configuration: configuration) {
+            configuration.label
+                .font(.app(.body, .semibold))
+                .foregroundColor(foregroundColor)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity)
+                .background(Color.appFill)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
+        }
     }
 }
 
@@ -145,14 +209,23 @@ struct AppCardStyle: ViewModifier {
         content
             .padding(20)
             .background(Color.appSurface)
-            .cornerRadius(24)
-            .shadow(color: Color.black.opacity(0.04), radius: 10, x: 0, y: 2)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
     }
 }
 
 extension View {
     func appCard() -> some View {
         self.modifier(AppCardStyle())
+    }
+
+    // 테두리 없이 회색으로 채운 입력칸.
+    func appInputField() -> some View {
+        self
+            .font(.app(.body))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(Color.appFill)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
     }
 
     func refreshStatusOverlay(isVisible: Bool, text: String = "새로고침 중") -> some View {
@@ -186,18 +259,13 @@ private struct RefreshStatusBadge: View {
             ProgressView()
                 .controlSize(.small)
             Text(text)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(.app(.caption, .semibold))
                 .foregroundColor(.appTextSecondary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color.appSurface.opacity(0.96))
+        .background(.regularMaterial)
         .clipShape(Capsule())
-        .overlay(
-            Capsule()
-                .stroke(Color.appLine, lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
     }
 }
 
@@ -209,18 +277,19 @@ struct SectionHeader: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(.app(.headline, .bold))
                 .foregroundColor(.appTextPrimary)
             Spacer()
             if let trailing = trailing {
                 Button(action: { action?() }) {
                     Text(trailing)
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .font(.app(.callout, .medium))
                         .foregroundColor(.appTextSecondary)
                 }
             }
         }
-        .padding(.bottom, 4)
+        .padding(.horizontal, 4)
+        .padding(.bottom, 2)
     }
 }
 
@@ -235,7 +304,7 @@ struct MinimumWageHint: View {
     var body: some View {
         if let wage, wage > 0, wage < AppConfig.minimumHourlyWage {
             Text("2026년 최저시급(\(Int(AppConfig.minimumHourlyWage).formatted())원)보다 낮아요")
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.app(.caption, .medium))
                 .foregroundColor(.appWarning)
         }
     }
@@ -247,11 +316,11 @@ struct StatusPill: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .font(.app(.caption, .semibold))
             .foregroundColor(color)
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(color.opacity(0.1))
-            .cornerRadius(8)
+            .padding(.vertical, 5)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
     }
 }

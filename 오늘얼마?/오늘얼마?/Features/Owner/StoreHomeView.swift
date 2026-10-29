@@ -41,7 +41,7 @@ struct StoreHomeView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(selectedStoreName)
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .font(.app(.largeTitle, .bold))
                             .foregroundColor(.appTextPrimary)
                     }
                     Spacer()
@@ -85,7 +85,7 @@ struct StoreHomeView: View {
                         } else if stores.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("아직 등록된 매장이 없어요.")
-                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .font(.app(.callout, .medium))
                                     .foregroundColor(.appTextSecondary)
                                 Button(action: { isPresentingCreateStore = true }) {
                                     Text("내 매장 등록하기")
@@ -100,7 +100,7 @@ struct StoreHomeView: View {
 
                         if let storeError {
                             Text(storeError)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .font(.app(.caption, .medium))
                                 .foregroundColor(.appWarning)
                                 .padding(.horizontal, 20)
                         }
@@ -110,7 +110,7 @@ struct StoreHomeView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Text("이번 달 예상 급여")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .font(.app(.callout, .semibold))
                                 .foregroundColor(.appTextSecondary)
                             Spacer()
                         }
@@ -121,11 +121,11 @@ struct StoreHomeView: View {
                         } else {
                             HStack(alignment: .bottom) {
                                 Text(formatWon(todayPay))
-                                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                                    .font(.app(.largeTitle, .bold))
                                     .foregroundColor(.appTextPrimary)
                                 Spacer()
                                 Text("총 \(formatHours(todayMinutes))")
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .font(.app(.caption, .medium))
                                     .foregroundColor(.appTextSecondary)
                                     .padding(.bottom, 6)
                             }
@@ -139,7 +139,7 @@ struct StoreHomeView: View {
                                 OwnerMonthlyDetailView(storeId: storeId)
                             } else {
                                 Text("매장을 선택해주세요.")
-                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .font(.app(.callout, .medium))
                                     .foregroundColor(.appTextSecondary)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .background(Color.appBackground.ignoresSafeArea())
@@ -147,7 +147,7 @@ struct StoreHomeView: View {
                         } label: {
                             HStack {
                                 Text("자세히 보기")
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .font(.app(.caption, .semibold))
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .resizable()
@@ -167,7 +167,7 @@ struct StoreHomeView: View {
                         
                         if workingNow.isEmpty {
                             Text("현재 근무 중인 알바가 없어요.")
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .font(.app(.caption, .medium))
                                 .foregroundColor(.appTextSecondary)
                                 .padding(.horizontal, 20)
                         } else {
@@ -180,18 +180,17 @@ struct StoreHomeView: View {
                                                 .frame(width: 50, height: 50)
                                                 .overlay(
                                                     Text(String(name.prefix(1)))
-                                                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                                                        .font(.app(.headline, .bold))
                                                         .foregroundColor(.appAccent)
                                                 )
                                             Text(name)
-                                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                                .font(.app(.callout, .medium))
                                                 .foregroundColor(.appTextPrimary)
                                         }
                                         .padding(16)
                                         .frame(width: 100)
                                         .background(Color.appSurface)
                                         .cornerRadius(20)
-                                        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 4)
                                     }
                                 }
                                 .padding(.horizontal, 20)
@@ -250,7 +249,6 @@ struct StoreHomeView: View {
                         .background(Color.appSurface)
                         .cornerRadius(20)
                         .padding(.horizontal, 20)
-                        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 4)
                     }
                 }
                 .padding(.bottom, 40)
@@ -351,10 +349,10 @@ struct StoreHomeView: View {
                     storeDeleteMenu(selectedStore)
                 }
                 .padding(14)
-                .background(Color.appSurface)
-                .cornerRadius(14)
+                .background(Color.appFill)
+                .cornerRadius(12)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: 12)
                         .stroke(Color.appAccent.opacity(0.35), lineWidth: 1)
                 )
             }
@@ -395,12 +393,8 @@ struct StoreHomeView: View {
             storeDeleteMenu(store)
         }
         .padding(12)
-        .background(Color.appSurface)
-        .cornerRadius(14)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.appLine, lineWidth: 1)
-        )
+        .background(Color.appFill)
+        .cornerRadius(12)
     }
 
     private func storeDeleteMenu(_ store: Store) -> some View {
@@ -423,13 +417,13 @@ struct StoreHomeView: View {
     private func storeInfo(_ store: Store) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(store.name)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(.app(.body, .semibold))
                 .foregroundColor(.appTextPrimary)
                 .lineLimit(1)
 
             if let address = store.address, !address.isEmpty {
                 Text(address)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
                     .lineLimit(1)
             }
@@ -442,7 +436,7 @@ struct StoreHomeView: View {
                 .foregroundColor(.appTextSecondary)
                 .frame(width: 24)
             Text(title)
-                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .font(.app(.body, .medium))
                 .foregroundColor(.appTextPrimary)
             Spacer()
             Image(systemName: "chevron.right")
@@ -769,21 +763,15 @@ struct CreateStoreView: View {
                                 }) {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(place.placeName)
-                                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                            .font(.app(.callout, .semibold))
                                             .foregroundColor(.appTextPrimary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         Text(place.displayAddress)
-                                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                                            .font(.app(.caption, .medium))
                                             .foregroundColor(.appTextSecondary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
-                                    .padding(12)
-                                    .background(Color.appSurface)
-                                    .cornerRadius(12)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color.appLine, lineWidth: 1)
-                                    )
+                                    .appInputField()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -793,13 +781,13 @@ struct CreateStoreView: View {
 
                     if let searchError {
                         Text(searchError)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appWarning)
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("매장 이름")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(.appTextSecondary)
                         HStack(spacing: 8) {
                             TextField("강남 1호점", text: $name)
@@ -808,13 +796,7 @@ struct CreateStoreView: View {
                                 .submitLabel(.search)
                                 .onSubmit { Task { await searchPlaces() } }
                                 .foregroundColor(.appTextPrimary)
-                                .padding(12)
-                                .background(Color.appSurface)
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.appLine, lineWidth: 1)
-                                )
+                                .appInputField()
                             Button("검색") {
                                 Task { await searchPlaces() }
                             }
@@ -825,17 +807,11 @@ struct CreateStoreView: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("주소 (선택)")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(.appTextSecondary)
                         TextField("서울 강남구 ...", text: $address)
                             .foregroundColor(.appTextPrimary)
-                            .padding(12)
-                            .background(Color.appSurface)
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
+                            .appInputField()
                     }
 
                     Button(action: {
@@ -970,46 +946,28 @@ struct CreateWorkerView: View {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("이름")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                     TextField("홍길동", text: $name)
-                        .padding(12)
-                        .background(Color.appSurface)
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.appLine, lineWidth: 1)
-                        )
+                        .appInputField()
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("전화번호 (선택)")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                     TextField("010-1234-5678", text: $phone)
                         .keyboardType(.phonePad)
-                        .padding(12)
-                        .background(Color.appSurface)
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.appLine, lineWidth: 1)
-                        )
+                        .appInputField()
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("시급 (원)")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                     TextField("예: 10320", text: $wage)
                         .keyboardType(.numberPad)
-                        .padding(12)
-                        .background(Color.appSurface)
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.appLine, lineWidth: 1)
-                        )
+                        .appInputField()
                     MinimumWageHint(input: wage)
                 }
 

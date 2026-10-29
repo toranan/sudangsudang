@@ -52,7 +52,7 @@ struct ApprovalView: View {
                             .appCard()
                     } else if pending.isEmpty {
                         Text("대기 중인 요청이 없어요.")
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                             .appCard()
                     } else {
@@ -61,15 +61,15 @@ struct ApprovalView: View {
                                 VStack(alignment: .leading, spacing: 10) {
                                     HStack {
                                         Text(workerDisplayName(item))
-                                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                                            .font(.app(.body, .bold))
                                             .foregroundColor(.appTextPrimary)
                                         Spacer()
                                         Text(formatRange(item))
-                                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                                            .font(.app(.caption, .medium))
                                             .foregroundColor(.appTextSecondary)
                                     }
                                     Text(formatDetail(item))
-                                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                                        .font(.app(.callout, .medium))
                                         .foregroundColor(.appTextPrimary)
 
                                     HStack(spacing: 10) {
@@ -86,7 +86,7 @@ struct ApprovalView: View {
                                     }
                                     if !hasCheckout(item) {
                                         Text("퇴근 처리 후 승인할 수 있어요.")
-                                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                                            .font(.app(.caption, .medium))
                                             .foregroundColor(.appWarning)
                                     }
                                 }
@@ -100,7 +100,7 @@ struct ApprovalView: View {
                     SectionHeader(title: "최근 승인/반려")
                     if recent.isEmpty {
                         Text("최근 내역이 없어요.")
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .font(.app(.caption, .medium))
                             .foregroundColor(.appTextSecondary)
                             .appCard()
                     } else {
@@ -109,7 +109,7 @@ struct ApprovalView: View {
                                 VStack(alignment: .leading, spacing: 6) {
                                     HStack {
                                         Text(workerDisplayName(item))
-                                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                            .font(.app(.callout, .semibold))
                                             .foregroundColor(.appTextPrimary)
                                         Spacer()
                                         StatusPill(
@@ -118,19 +118,13 @@ struct ApprovalView: View {
                                         )
                                     }
                                     Text(formatRange(item))
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextSecondary)
                                     Text(formatDetail(item))
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .font(.app(.caption, .medium))
                                         .foregroundColor(.appTextSecondary)
                                 }
-                                .padding(12)
-                                .background(Color.appSurface)
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.appLine, lineWidth: 1)
-                                )
+                                .appInputField()
                             }
                         }
                     }
@@ -138,7 +132,7 @@ struct ApprovalView: View {
 
                 if let loadError {
                     Text(loadError)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appWarning)
                 }
             }
@@ -170,16 +164,12 @@ struct ApprovalView: View {
                     let isSelected = store.id == selectedStoreId
                     Button(action: { selectedStoreId = store.id }) {
                         Text(store.name)
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(.app(.caption, .semibold))
                             .foregroundColor(isSelected ? .white : .appTextPrimary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(isSelected ? Color.appAccent : Color.appSurface)
                             .cornerRadius(999)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 999)
-                                    .stroke(Color.appLine, lineWidth: 1)
-                            )
                     }
                 }
             }

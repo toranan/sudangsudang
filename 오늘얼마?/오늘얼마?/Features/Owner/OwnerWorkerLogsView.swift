@@ -33,7 +33,7 @@ struct OwnerWorkerLogsView: View {
                         .appCard()
                 } else if logs.isEmpty {
                     Text("근무 내역이 없어요.")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                         .appCard()
                 } else {
@@ -46,7 +46,7 @@ struct OwnerWorkerLogsView: View {
 
                 if let loadError {
                     Text(loadError)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appWarning)
                 }
             }
@@ -69,10 +69,10 @@ struct OwnerWorkerLogsView: View {
         return HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(rangeText)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.app(.callout, .semibold))
                     .foregroundColor(.appTextPrimary)
                 Text("\(formatHours(minutes)) · \(statusLabel(log.status))")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
             }
             Spacer()
@@ -81,10 +81,6 @@ struct OwnerWorkerLogsView: View {
         .padding(14)
         .background(Color.appSurface)
         .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.appLine, lineWidth: 1)
-        )
     }
 
     @MainActor

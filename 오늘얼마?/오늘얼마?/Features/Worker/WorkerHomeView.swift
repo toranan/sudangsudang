@@ -241,7 +241,7 @@ struct WorkerHomeView: View {
                     .appCard()
             } else if storePays.isEmpty {
                 Text("등록된 매장이 없어요.")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
                     .appCard()
                 Button(action: { isPresentingJoinStore = true }) {
@@ -265,12 +265,12 @@ struct WorkerHomeView: View {
 
             if let loadError {
                 Text(loadError)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appWarning)
             }
             if let deleteError {
                 Text(deleteError)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appWarning)
             }
         }
@@ -315,10 +315,10 @@ struct WorkerHomeView: View {
                     workerStoreMenu(selectedStorePay)
                 }
                 .padding(14)
-                .background(Color.appSurface)
-                .cornerRadius(14)
+                .background(Color.appFill)
+                .cornerRadius(12)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: 12)
                         .stroke(Color.appAccent.opacity(0.35), lineWidth: 1)
                 )
             }
@@ -363,35 +363,31 @@ struct WorkerHomeView: View {
             workerStoreMenu(store)
         }
         .padding(12)
-        .background(Color.appSurface)
-        .cornerRadius(14)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.appLine, lineWidth: 1)
-        )
+        .background(Color.appFill)
+        .cornerRadius(12)
     }
 
     private func workerStoreInfo(_ store: StorePay) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(store.name)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .font(.app(.body, .semibold))
                     .foregroundColor(.appTextPrimary)
                     .lineLimit(1)
 
                 if store.isPersonal {
                     Text("개인")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .font(.app(.caption, .bold))
                         .foregroundColor(.appAccent)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(Color.appAccent.opacity(0.1))
-                        .cornerRadius(7)
+                        .cornerRadius(10)
                 }
             }
 
             Text("시급 \(formatWon(store.hourlyWage)) · 월급일 \(store.paydayText)")
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.app(.caption, .medium))
                 .foregroundColor(.appTextSecondary)
                 .lineLimit(1)
         }
@@ -422,16 +418,16 @@ struct WorkerHomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("\(monthTitle(selectedMonth)) 예상 급여")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.app(.caption, .semibold))
                     .foregroundColor(.appTextSecondary)
                 Spacer()
                 Text(store.monthWorkedText)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(.app(.caption, .semibold))
                     .foregroundColor(.appTextSecondary)
             }
 
             Text(store.monthPayText)
-                .font(.system(size: 30, weight: .heavy, design: .rounded))
+                .font(.app(.largeTitle, .bold))
                 .foregroundColor(.appTextPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -447,20 +443,16 @@ struct WorkerHomeView: View {
         }
         .padding(16)
         .background(Color.appSurface)
-        .cornerRadius(18)
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.appLine, lineWidth: 1)
-        )
+        .cornerRadius(16)
     }
 
     private func summaryPair(title: String, value: String, alignment: HorizontalAlignment = .leading) -> some View {
         VStack(alignment: alignment, spacing: 4) {
             Text(title)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.app(.caption, .medium))
                 .foregroundColor(.appTextSecondary)
             Text(value)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .font(.app(.caption, .bold))
                 .foregroundColor(.appTextPrimary)
         }
     }
@@ -499,11 +491,7 @@ struct WorkerHomeView: View {
             .buttonStyle(.plain)
         }
         .background(Color.appSurface)
-        .cornerRadius(18)
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.appLine, lineWidth: 1)
-        )
+        .cornerRadius(16)
     }
 
     private func workerQuickMenuRow(icon: String, title: String) -> some View {
@@ -512,7 +500,7 @@ struct WorkerHomeView: View {
                 .foregroundColor(.appTextSecondary)
                 .frame(width: 24)
             Text(title)
-                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .font(.app(.body, .medium))
                 .foregroundColor(.appTextPrimary)
             Spacer()
             Image(systemName: "chevron.right")
@@ -531,7 +519,7 @@ struct WorkerHomeView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text(store.name)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                     Spacer()
                     Menu {
@@ -549,39 +537,35 @@ struct WorkerHomeView: View {
                 }
                 HStack(alignment: .bottom) {
                     Text(store.monthPayText)
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .font(.app(.title, .bold))
                         .foregroundColor(.appTextPrimary)
                     Spacer()
                     Text("\(monthTitle(selectedMonth)) \(store.monthWorkedText)")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                 }
                 HStack {
                     Text("오늘 급여")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                     Spacer()
                     Text(store.todayPayText)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                 }
                 HStack {
                     Text("세후 예상")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .font(.app(.caption, .medium))
                         .foregroundColor(.appTextSecondary)
                     Spacer()
                     Text(store.monthNetPayText)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                 }
             }
             .padding(14)
             .background(Color.appSurface)
             .cornerRadius(16)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.appLine, lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
     }
@@ -631,7 +615,7 @@ struct WorkerHomeView: View {
                 }
                 Spacer()
                 Text(monthTitle(selectedMonth))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.app(.caption, .semibold))
                     .foregroundColor(.appTextPrimary)
                 Spacer()
                 Button(action: moveToNextMonth) {
@@ -656,10 +640,10 @@ struct WorkerHomeView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("총급여")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
                     Text(totalMonthPayText)
-                        .font(.system(size: 38, weight: .heavy, design: .rounded))
+                        .font(.app(.display, .bold))
                         .foregroundColor(.appTextPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
@@ -684,21 +668,17 @@ struct WorkerHomeView: View {
 
             HStack {
                 Text("\(monthTitle(selectedMonth)) 총급여")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
                 Spacer()
                 Text("세후 예상 \(totalMonthNetPayText)")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .font(.app(.caption, .semibold))
                     .foregroundColor(.appTextSecondary)
             }
         }
         .padding(16)
         .background(Color.appSurface)
-        .cornerRadius(18)
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.appLine, lineWidth: 1)
-        )
+        .cornerRadius(16)
     }
 
     private var totalMonthPayText: String {
