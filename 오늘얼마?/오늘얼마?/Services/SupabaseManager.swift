@@ -520,7 +520,7 @@ final class SupabaseManager {
             .execute()
             .value
         if let existing = rows.first {
-            // 예전에 영문이 섞인 코드로 만든 매장은 숫자 코드로 바꿔 준다. 바꾸지 못하면 기존 코드를 그대로 쓴다.
+            // 예전 형식(영문 섞임, 8자리) 코드는 6자리 숫자 코드로 바꿔 준다. 바꾸지 못하면 기존 코드를 그대로 쓴다.
             guard existing.token.allSatisfy(\.isNumber), existing.token.count == Self.storeCodeLength else {
                 return (try? await reissueStoreCode(storeId: storeId)) ?? existing.token
             }
@@ -584,8 +584,8 @@ final class SupabaseManager {
         return AppTime.calendar.date(from: components) ?? Date.distantFuture
     }()
 
-    // 입력하기 쉽게 숫자만 쓴다. 오래 유지되는 코드라 48시간 초대코드(6자리)보다 길게 8자리(1억 가지).
-    private static let storeCodeLength = 8
+    // 입력하기 쉽게 숫자 6자리. 코드가 퍼지면 '코드 새로 만들기'로 바로 막는다.
+    private static let storeCodeLength = 6
     private static let storeCodeAlphabet = Array("0123456789")
 
     private func generateInviteCode(length: Int, alphabet: [Character]) -> String {

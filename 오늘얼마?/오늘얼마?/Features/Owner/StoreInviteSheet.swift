@@ -43,7 +43,7 @@ struct StoreInviteSheet: View {
                     } else if isLoading {
                         ProgressView()
                     } else {
-                        Text("---- ----")
+                        Text("--- ---")
                             .font(.system(size: 34, weight: .heavy, design: .rounded))
                             .foregroundColor(.appLine)
                     }
@@ -63,7 +63,8 @@ struct StoreInviteSheet: View {
                 } label: {
                     Label(didCopy ? "복사됨" : "복사", systemImage: didCopy ? "checkmark" : "doc.on.doc")
                 }
-                .buttonStyle(SecondaryButtonStyle(foregroundColor: .appTextPrimary))
+                // 코드 박스와 같은 회색으로 맞춘다.
+                .buttonStyle(PrimaryButtonStyle(backgroundColor: .appFill, foregroundColor: .appTextPrimary))
 
                 if let code {
                     ShareLink(item: shareMessage(code: code)) {
@@ -101,7 +102,8 @@ struct StoreInviteSheet: View {
         .padding(.top, 28)
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity)
-        .background(Color.appSurface.ignoresSafeArea())
+        .frame(maxHeight: .infinity, alignment: .top)
+        .presentationBackground(Color.appSurface)
         .presentationDetents([.height(360)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
@@ -119,8 +121,8 @@ struct StoreInviteSheet: View {
     }
 
     private func spaced(_ code: String) -> String {
-        guard code.count == 8 else { return code }
-        return "\(code.prefix(4)) \(code.suffix(4))"
+        guard code.count == 6 else { return code }
+        return "\(code.prefix(3)) \(code.suffix(3))"
     }
 
     private func shareMessage(code: String) -> String {

@@ -21,7 +21,7 @@ to authenticated
 with check (user_id = auth.uid());
 
 -- 2) 매장 코드 다시 만들기. invites에 사장님 UPDATE 정책이 없어 앱에서 이전 코드를
---    만료시키지 못했다. 소유자 확인 후 서버에서 이전 코드 만료 + 새 8자리 숫자 코드 발급을 한 번에 한다.
+--    만료시키지 못했다. 소유자 확인 후 서버에서 이전 코드 만료 + 새 6자리 숫자 코드 발급을 한 번에 한다.
 create extension if not exists pgcrypto;
 
 create or replace function public.reissue_store_code(p_store_id uuid)
@@ -45,7 +45,7 @@ begin
     and expires_at > now();
 
   for attempt in 1..10 loop
-    v_token := lpad(((('x' || encode(gen_random_bytes(4), 'hex'))::bit(32)::bigint) % 100000000)::text, 8, '0');
+    v_token := lpad(((('x' || encode(gen_random_bytes(4), 'hex'))::bit(32)::bigint) % 1000000)::text, 6, '0');
     begin
       insert into public.invites (store_id, token, expires_at)
       values (p_store_id, v_token, '2099-12-31T00:00:00Z');
