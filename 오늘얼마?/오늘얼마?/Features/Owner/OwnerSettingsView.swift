@@ -32,6 +32,15 @@ struct OwnerSettingsView: View {
                     .buttonStyle(PressableRowStyle())
                 }
 
+                group("도움") {
+                    NavigationLink {
+                        InquiryView(role: "사장님")
+                    } label: {
+                        row("문의하기", subtitle: "오류 신고 · 기능 제안", systemImage: "envelope", showsChevron: true)
+                    }
+                    .buttonStyle(PressableRowStyle())
+                }
+
                 group("계정") {
                     Button {
                         Task {

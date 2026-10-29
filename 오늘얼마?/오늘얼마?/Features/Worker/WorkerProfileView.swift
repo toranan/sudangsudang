@@ -69,6 +69,28 @@ struct WorkerProfileView: View {
                     }
                     .appCard()
 
+                    NavigationLink {
+                        InquiryView(role: "알바생")
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "envelope")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.appAccent)
+                            Text("문의하기")
+                                .font(.app(.body, .semibold))
+                                .foregroundColor(.appTextPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.appTextSecondary)
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 16)
+                        .background(Color.appSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+                    }
+                    .buttonStyle(PressableRowStyle())
+
                     Text("계정")
                         .font(.system(size: 19, weight: .heavy))
                         .foregroundColor(.appTextPrimary)
