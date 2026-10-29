@@ -3,9 +3,137 @@ import SwiftUI
 import Supabase
 #endif
 
-// 사장님 설정 탭: 매장 기본 급여 규칙과 계정.
-// 직원별로 다르게 하고 싶은 항목만 알바관리에서 따로 바꾼다.
+// 사장님 설정 탭: 항목을 눌러 들어가 바꾸는 목록.
 struct OwnerSettingsView: View {
+    @State private var isShowingDeleteAccountConfirm = false
+    @State private var isShowingDeleteAccountError = false
+    @State private var deleteAccountErrorMessage: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("설정")
+                    .font(.system(size: 26, weight: .heavy))
+                    .tracking(-0.6)
+                    .foregroundColor(.appTextPrimary)
+                    .padding(.top, 10)
+
+                group("매장") {
+                    NavigationLink {
+                        PayrollDefaultsView()
+                    } label: {
+                        row(
+                            "급여 기본값",
+                            subtitle: "시급 · 휴게 · 주휴 · 야간 · 공제",
+                            systemImage: "wonsign",
+                            showsChevron: true
+                        )
+                    }
+                    .buttonStyle(PressableRowStyle())
+                }
+
+                group("계정") {
+                    Button {
+                        Task {
+                            await SupabaseManager.shared.signOut()
+                            NotificationCenter.default.post(name: .didLogout, object: nil)
+                        }
+                    } label: {
+                        row("로그아웃", systemImage: "rectangle.portrait.and.arrow.right")
+                    }
+                    .buttonStyle(PressableRowStyle())
+
+                    Rectangle().fill(Color.appLine).frame(height: 1)
+
+                    Button {
+                        isShowingDeleteAccountConfirm = true
+                    } label: {
+                        row("계정 삭제", systemImage: "trash", color: .appWarning)
+                    }
+                    .buttonStyle(PressableRowStyle())
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 40)
+        }
+        .background(Color.appBackground.ignoresSafeArea())
+        .alert("계정을 삭제하시겠습니까?", isPresented: $isShowingDeleteAccountConfirm) {
+            Button("삭제", role: .destructive) {
+                Task { await deleteAccount() }
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("모든 데이터가 삭제되며 복구할 수 없습니다.")
+        }
+        .alert("계정 삭제 실패", isPresented: $isShowingDeleteAccountError) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text(deleteAccountErrorMessage ?? "잠시 후 다시 시도해주세요.")
+        }
+    }
+
+    private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.app(.caption, .semibold))
+                .foregroundColor(.appTextSecondary)
+                .padding(.horizontal, 4)
+            VStack(spacing: 0, content: content)
+                .padding(.horizontal, 18)
+                .background(Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+        }
+    }
+
+    private func row(
+        _ title: String,
+        subtitle: String? = nil,
+        systemImage: String,
+        color: Color = .appTextPrimary,
+        showsChevron: Bool = false
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(color == .appTextPrimary ? .appAccent : color)
+                .frame(width: 34, height: 34)
+                .background(color == .appTextPrimary ? Color.appAccentSoft : color.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.app(.callout, .semibold))
+                    .foregroundColor(color)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.app(.caption))
+                        .foregroundColor(.appTextSecondary)
+                }
+            }
+            Spacer()
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.appTextSecondary)
+            }
+        }
+        .padding(.vertical, 14)
+    }
+
+    @MainActor
+    private func deleteAccount() async {
+        do {
+            try await SupabaseManager.shared.deleteAccount()
+            await SupabaseManager.shared.signOut()
+            NotificationCenter.default.post(name: .didLogout, object: nil)
+        } catch {
+            deleteAccountErrorMessage = AppErrorMessage.userMessage(error)
+            isShowingDeleteAccountError = true
+        }
+    }
+}
+
+// 매장 기본 급여 규칙. 직원별로 다르게 할 항목만 알바관리 → 직원 → 설정에서 바꾼다.
+struct PayrollDefaultsView: View {
     struct StoreDefaults: Codable, Identifiable, Equatable {
         let id: UUID
         let name: String
@@ -36,20 +164,11 @@ struct OwnerSettingsView: View {
     @State private var needsDatabaseUpdate = false
     @State private var loadError: String?
     @State private var saveMessage: String?
-    @State private var isShowingDeleteAccountConfirm = false
-    @State private var isShowingDeleteAccountError = false
-    @State private var deleteAccountErrorMessage: String?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("설정")
-                    .font(.app(.title, .bold))
-                    .foregroundColor(.appTextPrimary)
-                    .padding(.top, 10)
-
                 payrollDefaultsSection
-                accountSection
 
                 if let loadError {
                     Text(loadError)
@@ -58,6 +177,7 @@ struct OwnerSettingsView: View {
                 }
             }
             .padding(.horizontal, 20)
+            .padding(.top, 8)
             .padding(.bottom, 40)
         }
         .appRefreshable {
@@ -68,19 +188,9 @@ struct OwnerSettingsView: View {
         .task {
             await load()
         }
-        .alert("계정을 삭제하시겠습니까?", isPresented: $isShowingDeleteAccountConfirm) {
-            Button("삭제", role: .destructive) {
-                Task { await deleteAccount() }
-            }
-            Button("취소", role: .cancel) {}
-        } message: {
-            Text("모든 데이터가 삭제되며 복구할 수 없습니다.")
-        }
-        .alert("계정 삭제 실패", isPresented: $isShowingDeleteAccountError) {
-            Button("확인", role: .cancel) {}
-        } message: {
-            Text(deleteAccountErrorMessage ?? "잠시 후 다시 시도해주세요.")
-        }
+        .navigationTitle("급여 기본값")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 
     // MARK: - Payroll defaults
@@ -88,10 +198,9 @@ struct OwnerSettingsView: View {
     @ViewBuilder
     private var payrollDefaultsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                SectionHeader(title: "급여 기본값")
-                Spacer()
-                if stores.count > 1 {
+            if stores.count > 1 {
+                HStack {
+                    Spacer()
                     storePicker
                 }
             }
@@ -250,47 +359,6 @@ struct OwnerSettingsView: View {
         }
     }
 
-    // MARK: - Account
-
-    private var accountSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "계정")
-            VStack(spacing: 0) {
-                Button {
-                    Task {
-                        await SupabaseManager.shared.signOut()
-                        NotificationCenter.default.post(name: .didLogout, object: nil)
-                    }
-                } label: {
-                    accountRow("로그아웃", color: .appTextPrimary)
-                }
-                .buttonStyle(PressableRowStyle())
-
-                Divider()
-
-                Button {
-                    isShowingDeleteAccountConfirm = true
-                } label: {
-                    accountRow("계정 삭제", color: .appWarning)
-                }
-                .buttonStyle(PressableRowStyle())
-            }
-            .padding(.horizontal, 20)
-            .background(Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
-        }
-    }
-
-    private func accountRow(_ title: String, color: Color) -> some View {
-        HStack {
-            Text(title)
-                .font(.app(.body, .medium))
-                .foregroundColor(color)
-            Spacer()
-        }
-        .padding(.vertical, 16)
-    }
-
     // MARK: - Data
 
     private var hasChanges: Bool {
@@ -388,17 +456,5 @@ struct OwnerSettingsView: View {
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
-    }
-
-    @MainActor
-    private func deleteAccount() async {
-        do {
-            try await SupabaseManager.shared.deleteAccount()
-            await SupabaseManager.shared.signOut()
-            NotificationCenter.default.post(name: .didLogout, object: nil)
-        } catch {
-            deleteAccountErrorMessage = AppErrorMessage.userMessage(error)
-            isShowingDeleteAccountError = true
-        }
     }
 }
