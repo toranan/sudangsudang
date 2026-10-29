@@ -66,39 +66,51 @@ struct WorkerStoreKnowledgeView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Button(action: { dismiss() }) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.appTextPrimary)
-                    .frame(width: 38, height: 38)
-                    .background(Color.appSurface)
-                    .clipShape(Circle())
+                    .frame(width: 36, height: 36)
+                    .background(Color.appSurface, in: Circle())
             }
+            .buttonStyle(PressableRowStyle())
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(isChatOnly ? "챗봇" : "가게 소식")
-                    .font(.app(.largeTitle, .bold))
-                    .foregroundColor(.appTextPrimary)
+            VStack(alignment: .leading, spacing: 4) {
                 Text(storeName)
-                    .font(.app(.caption, .medium))
+                    .font(.app(.callout, .medium))
                     .foregroundColor(.appTextSecondary)
                     .lineLimit(1)
+                Text(isChatOnly ? "물어보기" : "가게 소식")
+                    .font(.system(size: 26, weight: .heavy))
+                    .tracking(-0.6)
+                    .foregroundColor(.appTextPrimary)
             }
-
-            Spacer()
+            .padding(.horizontal, 4)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
         .padding(.top, 10)
     }
 
     private var panelPicker: some View {
-        Picker("", selection: $selectedPanel) {
+        HStack(spacing: 2) {
             ForEach(WorkerStoreKnowledgePanel.documentCases) { panel in
-                Text(panel.title).tag(panel)
+                let isSelected = panel == selectedPanel
+                Button(action: { selectedPanel = panel }) {
+                    Text(panel.title)
+                        .font(.app(.caption, .semibold))
+                        .foregroundColor(isSelected ? .appOnInk : .appTextSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(isSelected ? Color.appInk : Color.clear, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
         }
-        .pickerStyle(.segmented)
+        .padding(3)
+        .background(Color.appFill, in: Capsule())
         .padding(.horizontal, 20)
     }
 
@@ -130,7 +142,7 @@ struct WorkerStoreKnowledgeView: View {
                         Button(action: { viewingDocument = document }) {
                             documentRow(document)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PressableRowStyle())
                     }
                 }
                 .padding(.horizontal, 20)
@@ -176,18 +188,15 @@ struct WorkerStoreKnowledgeView: View {
                 }
             }
 
-            Divider()
-                .background(Color.appLine)
-
             HStack(spacing: 10) {
                 TextField("메시지 입력", text: $chatInput, axis: .vertical)
                     .font(.app(.callout, .medium))
                     .focused($isChatInputFocused)
                     .lineLimit(1...4)
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .background(Color.appSurface)
-                    .cornerRadius(16)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .onSubmit { Task { await askQuestion() } }
 
                 Button(action: { Task { await askQuestion() } }) {
@@ -195,15 +204,15 @@ struct WorkerStoreKnowledgeView: View {
                         if isAsking {
                             ProgressView()
                                 .controlSize(.small)
-                                .tint(.white)
+                                .tint(.appOnInk)
                         } else {
                             Image(systemName: "arrow.up")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .appTextSecondary : .appOnInk)
                         }
                     }
-                    .frame(width: 42, height: 42)
-                    .background(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.appLine : Color.appAccent)
+                    .frame(width: 44, height: 44)
+                    .background(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isAsking ? Color.appFill : Color.appInk)
                     .clipShape(Circle())
                 }
                 .disabled(isAsking || chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -243,34 +252,32 @@ struct WorkerStoreKnowledgeView: View {
 
     private func documentRow(_ document: WorkerStoreDocumentRow) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: document.kind.icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(document.kind.color)
-                .frame(width: 34, height: 34)
-                .background(document.kind.color.opacity(0.12))
-                .clipShape(Circle())
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(document.kind.softColor)
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Image(systemName: document.kind.icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(document.kind.color)
+                )
 
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(document.kind.title)
                         .font(.app(.caption, .bold))
                         .foregroundColor(document.kind.color)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(document.kind.color.opacity(0.1))
-                        .cornerRadius(10)
 
                     if document.isPinned {
-                        Image(systemName: "pin.fill")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.appAccent)
+                        Text("· 상단 고정")
+                            .font(.app(.caption, .semibold))
+                            .foregroundColor(.appTextSecondary)
                     }
 
                     Spacer()
                 }
 
                 Text(document.title)
-                    .font(.app(.body, .semibold))
+                    .font(.app(.body, .bold))
                     .foregroundColor(.appTextPrimary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .lineLimit(1)
@@ -282,37 +289,33 @@ struct WorkerStoreKnowledgeView: View {
                     .lineLimit(2)
             }
         }
-        .padding(16)
+        .padding(18)
         .background(Color.appSurface)
-        .cornerRadius(16)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
     }
 
     private func documentDetailSheet(_ document: WorkerStoreDocumentRow) -> some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    HStack(spacing: 8) {
-                        Label(document.kind.title, systemImage: document.kind.icon)
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(document.kind.color)
+                            .frame(width: 7, height: 7)
+                        Text(document.kind.title)
                             .font(.app(.caption, .bold))
                             .foregroundColor(document.kind.color)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(document.kind.color.opacity(0.1))
-                            .cornerRadius(10)
 
                         if document.isPinned {
-                            Label("상단 고정", systemImage: "pin.fill")
-                                .font(.app(.caption, .bold))
-                                .foregroundColor(.appAccent)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.appAccent.opacity(0.1))
-                                .cornerRadius(10)
+                            Text("· 상단 고정")
+                                .font(.app(.caption, .semibold))
+                                .foregroundColor(.appTextSecondary)
                         }
                     }
 
                     Text(document.title)
-                        .font(.app(.title, .bold))
+                        .font(.system(size: 24, weight: .heavy))
+                        .tracking(-0.5)
                         .foregroundColor(.appTextPrimary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -346,16 +349,12 @@ struct WorkerStoreKnowledgeView: View {
 
             Text(message.content)
                 .font(.app(.callout, .medium))
-                .foregroundColor(message.role == .user ? .white : .appTextPrimary)
+                .foregroundColor(message.role == .user ? .appOnInk : .appTextPrimary)
                 .lineSpacing(3)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
-                .background(message.role == .user ? Color.appAccent : Color.appSurface)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(message.role == .user ? Color.clear : Color.appLine, lineWidth: 1)
-                )
+                .background(message.role == .user ? Color.appInk : Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .frame(maxWidth: 280, alignment: message.role == .user ? .trailing : .leading)
 
             if message.role == .assistant {
@@ -381,7 +380,7 @@ struct WorkerStoreKnowledgeView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 13)
             .background(Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
             Spacer(minLength: 54)
         }
@@ -549,8 +548,15 @@ private enum WorkerStoreDocumentKind: String, Codable {
 
     var color: Color {
         switch self {
-        case .manual: return .appAccent
-        case .notice: return .appPositive
+        case .manual: return .appLavender
+        case .notice: return .appAccent
+        }
+    }
+
+    var softColor: Color {
+        switch self {
+        case .manual: return .appLavenderSoft
+        case .notice: return .appAccentSoft
         }
     }
 }

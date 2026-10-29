@@ -46,222 +46,18 @@ struct WorkerCheckInView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("오늘 근무")
-                            .font(.app(.callout, .semibold))
-                            .foregroundColor(.appTextPrimary)
-                        HStack {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("근무 시간")
-                                    .font(.app(.caption, .semibold))
-                                    .foregroundColor(.appTextSecondary)
-                                Text(formatHours(displayMinutes))
-                                    .font(.app(.title, .bold))
-                                    .foregroundColor(.appTextPrimary)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 6) {
-                                Text("예상 급여")
-                                    .font(.app(.caption, .semibold))
-                                    .foregroundColor(.appTextSecondary)
-                                Text(formatWon(displayPay))
-                                    .font(.app(.title, .bold))
-                                    .foregroundColor(.appTextPrimary)
-                            }
-                        }
-                        .appCard()
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("이번 달 요약")
-                            .font(.app(.callout, .semibold))
-                            .foregroundColor(.appTextPrimary)
-                        HStack {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("총 근무 시간")
-                                    .font(.app(.caption, .semibold))
-                                    .foregroundColor(.appTextSecondary)
-                                Text(store.monthWorkedText)
-                                    .font(.app(.title, .bold))
-                                    .foregroundColor(.appTextPrimary)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 6) {
-                                Text("세전 예상")
-                                    .font(.app(.caption, .semibold))
-                                    .foregroundColor(.appTextSecondary)
-                                Text(store.monthPayText)
-                                    .font(.app(.title, .bold))
-                                    .foregroundColor(.appTextPrimary)
-                                Text("세후 예상 \(monthNetPayText())")
-                                    .font(.app(.caption, .medium))
-                                    .foregroundColor(.appTextSecondary)
-                            }
-                        }
-                        .appCard()
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        SectionHeader(title: "출퇴근")
-                        VStack(spacing: 12) {
-                            Button(action: {
-                                Task { await toggleCheckIn() }
-                            }) {
-                                HStack {
-                                    if isLoadingAction {
-                                        ProgressView()
-                                            .tint(.white)
-                                        Text("처리 중...")
-                                    } else {
-                                        Image(systemName: isCheckedIn ? "stop.fill" : "play.fill")
-                                        Text(isCheckedIn ? "퇴근하기" : "출근하기")
-                                    }
-                                }
-                            }
-                            .buttonStyle(PrimaryButtonStyle(backgroundColor: isCheckedIn ? .appWarning : .appAccent))
-                            .disabled(isLoadingAction)
-                            .opacity(isLoadingAction ? 0.6 : 1.0)
-
-                            HStack {
-                                Image(systemName: "mappin.circle.fill")
-                                .foregroundColor(.appTextSecondary)
-                                Text(isCheckedIn ? "\(store.name)에서 근무 중" : "\(store.name) 출근 대기")
-                                    .font(.app(.caption, .medium))
-                                    .foregroundColor(.appTextSecondary)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 4)
-                        }
-                        if let actionError {
-                            Text(actionError)
-                                .font(.app(.caption, .medium))
-                                .foregroundColor(.appWarning)
-                        }
-                    }
-
-                    if store.isPersonal {
-                        fixedScheduleSection
-                    }
-
-                    manualAddSection
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        SectionHeader(title: "세부 설정")
-                        VStack(alignment: .leading, spacing: 10) {
-                            if store.isPersonal {
-                                Toggle(isOn: $applyWeeklyAllowance) {
-                                    Text("주휴수당 적용")
-                                        .font(.app(.caption, .medium))
-                                        .foregroundColor(.appTextPrimary)
-                                }
-                                .toggleStyle(SwitchToggleStyle(tint: .appAccent))
-                                .onChange(of: applyWeeklyAllowance) { _ in
-                                    persistLocalPayrollSettings()
-                                }
-
-                                Toggle(isOn: $applyNightAllowance) {
-                                    Text("야간수당 적용 (22:00~06:00 +50%)")
-                                        .font(.app(.caption, .medium))
-                                        .foregroundColor(.appTextPrimary)
-                                }
-                                .toggleStyle(SwitchToggleStyle(tint: .appAccent))
-                                .onChange(of: applyNightAllowance) { _ in
-                                    persistLocalPayrollSettings()
-                                }
-
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("공제 방식 (택 1)")
-                                        .font(.app(.caption, .semibold))
-                                        .foregroundColor(.appTextSecondary)
-                                    HStack(spacing: 8) {
-                                        ForEach(PayrollDeductionType.allCases) { option in
-                                            Button(action: {
-                                                deductionType = option
-                                                persistLocalPayrollSettings()
-                                            }) {
-                                                Text(option.title)
-                                                    .font(.app(.caption, .semibold))
-                                                    .foregroundColor(deductionType == option ? .white : .appTextPrimary)
-                                                    .frame(maxWidth: .infinity)
-                                                    .padding(.vertical, 10)
-                                                    .background(deductionType == option ? Color.appAccent : Color.appSurface)
-                                                    .cornerRadius(10)
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 10)
-                                                            .stroke(deductionType == option ? Color.appAccent : Color.appLine, lineWidth: 1)
-                                                    )
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-                                    }
-                                }
-
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("월급일")
-                                        .font(.app(.caption, .semibold))
-                                        .foregroundColor(.appTextSecondary)
-                                    Picker("월급일", selection: $payday) {
-                                        ForEach(1...31, id: \.self) { day in
-                                            Text("\(day)일").tag(day)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
-                                    .onChange(of: payday) { _ in
-                                        persistLocalPayrollSettings()
-                                    }
-                                }
-
-                                HStack {
-                                    Text("정산기간")
-                                        .font(.app(.caption, .medium))
-                                        .foregroundColor(.appTextSecondary)
-                                    Spacer()
-                                    Text("매월 1일 ~ 말일")
-                                        .font(.app(.caption, .semibold))
-                                        .foregroundColor(.appTextSecondary)
-                                }
-
-                                Text("다음 월급일 \(nextPaydayDateText())")
-                                    .font(.app(.caption, .medium))
-                                    .foregroundColor(.appTextSecondary)
-
-                                Text("개인 매장의 세부 설정은 이 기기에서만 저장돼요.")
-                                    .font(.app(.caption, .medium))
-                                    .foregroundColor(.appTextSecondary)
-                            } else {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("사장님이 설정한 기준이 적용돼요.")
-                                        .font(.app(.caption, .semibold))
-                                        .foregroundColor(.appTextPrimary)
-                                    Text("공제 방식: \(store.deductionType.title)")
-                                        .font(.app(.caption, .medium))
-                                        .foregroundColor(.appTextSecondary)
-                                    Text("주휴수당: \(store.applyWeeklyAllowance ? "적용" : "미적용")")
-                                        .font(.app(.caption, .medium))
-                                        .foregroundColor(.appTextSecondary)
-                                    Text("야간수당: \(store.applyNightAllowance ? "적용" : "미적용")")
-                                        .font(.app(.caption, .medium))
-                                        .foregroundColor(.appTextSecondary)
-                                    Text("월급일: 매월 \(store.paydayText)")
-                                        .font(.app(.caption, .medium))
-                                        .foregroundColor(.appTextSecondary)
-                                    Text("정산기간: 매월 1일 ~ 말일")
-                                        .font(.app(.caption, .medium))
-                                        .foregroundColor(.appTextSecondary)
-                                    Text("다음 월급일 \(nextPaydayDateText())")
-                                        .font(.app(.caption, .medium))
-                                        .foregroundColor(.appTextSecondary)
-                                }
-                            }
-                        }
-                        .appCard()
-                    }
-
+            VStack(alignment: .leading, spacing: 14) {
+                header
+                checkInCard
+                monthPayCard
+                statTiles
+                workToolsSection
+                settingsSection
                 historyEntryCard
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
+            .padding(.bottom, 24)
         }
         .appRefreshable {
             await loadCurrentLog()
@@ -270,7 +66,7 @@ struct WorkerCheckInView: View {
         .background(Color.appBackground.ignoresSafeArea())
         .contentShape(Rectangle())
         .onTapGesture { hideKeyboard() }
-        .navigationTitle(store.name)
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if store.isPersonal {
@@ -303,43 +99,403 @@ struct WorkerCheckInView: View {
         }
     }
 
-    private var historyEntryCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "내역")
+    private var header: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(store.isPersonal ? "개인 매장 출퇴근" : "출퇴근")
+                    .font(.app(.callout, .medium))
+                    .foregroundColor(.appTextSecondary)
+                Text(store.name)
+                    .font(.system(size: 26, weight: .heavy))
+                    .tracking(-0.6)
+                    .foregroundColor(.appTextPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            Spacer(minLength: 8)
             NavigationLink {
-                WorkerStoreHistoryView(
-                    storeName: store.name,
+                WorkerStoreKnowledgeView(
                     storeId: store.id,
-                    workerId: store.workerId,
-                    hourlyWage: store.hourlyWage
+                    storeName: store.name,
+                    initialPanel: .chat
                 )
             } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("내역 보기")
-                            .font(.app(.callout, .semibold))
-                            .foregroundColor(.appTextPrimary)
-                        Text("전체 근무 내역을 화면에서 길게 확인할 수 있어요.")
-                            .font(.app(.caption, .medium))
-                            .foregroundColor(.appTextSecondary)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(.appTextSecondary)
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("물어보기")
+                        .font(.app(.callout, .bold))
                 }
-                .appInputField()
+                .foregroundColor(.appAccent)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Color.appAccentSoft, in: Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableRowStyle())
         }
-        .appCard()
+        .padding(.horizontal, 4)
     }
 
-    private var manualAddSection: some View {
+    // 상태, 큰 근무 시간, 오늘 번 돈, 출근/퇴근 버튼.
+    private var checkInCard: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(isCheckedIn ? Color.appPositive : Color.appCaution)
+                    .frame(width: 7, height: 7)
+                Text(checkInStatusText)
+                    .font(.app(.caption, .bold))
+                    .foregroundColor(isCheckedIn ? .appAccent : .appTextSecondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isCheckedIn ? Color.appAccentSoft : Color.appFill, in: Capsule())
+
+            Text(timerText(displayMinutes))
+                .font(.system(size: 56, weight: .heavy))
+                .tracking(-2)
+                .monospacedDigit()
+                .foregroundColor(.appTextPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .contentTransition(.numericText())
+                .padding(.top, 8)
+
+            HStack(spacing: 0) {
+                Text("오늘 ")
+                Text(formatWon(displayPay))
+                    .fontWeight(.bold)
+                    .foregroundColor(.appTextPrimary)
+                Text(" 벌었어요")
+            }
+            .font(.app(.callout))
+            .foregroundColor(.appTextSecondary)
+
+            Button(action: {
+                Task { await toggleCheckIn() }
+            }) {
+                HStack(spacing: 8) {
+                    if isLoadingAction {
+                        ProgressView()
+                            .tint(.appOnInk)
+                        Text("처리 중...")
+                    } else {
+                        Text(isCheckedIn ? "퇴근하기" : "출근하기")
+                    }
+                }
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(isLoadingAction)
+            .padding(.top, 20)
+
+            Text(isCheckedIn ? "\(store.name)에서 근무 중" : "\(store.name) 출근 대기")
+                .font(.system(size: 12))
+                .foregroundColor(.appTextSecondary)
+                .padding(.top, 2)
+
+            if let actionError {
+                Text(actionError)
+                    .font(.app(.caption, .medium))
+                    .foregroundColor(.appWarning)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 22)
+        .padding(.top, 26)
+        .padding(.bottom, 20)
+        .background(Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+    }
+
+    private var checkInStatusText: String {
+        guard isCheckedIn else { return "출근 전" }
+        guard let currentCheckInAt else { return "근무 중" }
+        return "\(AppTime.displayFormatter("HH:mm").string(from: currentCheckInAt))부터 근무 중"
+    }
+
+    private var monthPayCard: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("이번 달 예상 급여")
+                    .font(.app(.callout, .medium))
+                    .foregroundColor(.white.opacity(0.8))
+                Text(store.monthPayText)
+                    .font(.system(size: 28, weight: .heavy))
+                    .tracking(-0.8)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text("세후 예상 \(monthNetPayText())")
+                    .font(.app(.caption, .medium))
+                    .foregroundColor(.white.opacity(0.8))
+            }
+            Spacer(minLength: 12)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("월급날까지")
+                    .font(.app(.caption, .medium))
+                    .foregroundColor(.white.opacity(0.8))
+                Text(paydayDDayText())
+                    .font(.system(size: 20, weight: .heavy))
+                    .foregroundColor(.white)
+                Text(nextPaydayDateText())
+                    .font(.app(.caption, .medium))
+                    .foregroundColor(.white.opacity(0.8))
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 20)
+        .background(Color.appAccent)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
+
+    private var statTiles: some View {
+        HStack(spacing: 10) {
+            statTile(title: "이번 달", value: store.monthWorkedText)
+            statTile(
+                title: "주휴수당",
+                value: applyWeeklyAllowance ? "적용" : "미적용",
+                valueColor: applyWeeklyAllowance ? .appAccent : .appTextSecondary
+            )
+            statTile(title: "시급", value: formatWon(store.hourlyWage))
+        }
+    }
+
+    private func statTile(title: String, value: String, valueColor: Color = .appTextPrimary) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundColor(.appTextSecondary)
+            Text(value)
+                .font(.system(size: 16, weight: .heavy))
+                .foregroundColor(valueColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 19, weight: .heavy))
+            .foregroundColor(.appTextPrimary)
+            .padding(.horizontal, 4)
+            .padding(.top, 8)
+    }
+
+    private var cardDivider: some View {
+        Rectangle()
+            .fill(Color.appLine)
+            .frame(height: 1)
+    }
+
+    private func infoRow(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.app(.callout))
+                .foregroundColor(.appTextSecondary)
+            Spacer()
+            Text(value)
+                .font(.app(.callout, .semibold))
+                .foregroundColor(.appTextPrimary)
+        }
+        .padding(.vertical, 13)
+    }
+
+    // 캡슐 안에서 하나를 고르는 칩 묶음 (세그먼트 대신).
+    private func chipGroup<Value: Hashable>(
+        _ options: [(value: Value, title: String)],
+        selection: Value,
+        onSelect: @escaping (Value) -> Void
+    ) -> some View {
+        HStack(spacing: 2) {
+            ForEach(options.indices, id: \.self) { index in
+                let option = options[index]
+                let isSelected = option.value == selection
+                Button(action: { onSelect(option.value) }) {
+                    Text(option.title)
+                        .font(.app(.caption, .semibold))
+                        .foregroundColor(isSelected ? .appOnInk : .appTextSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(isSelected ? Color.appInk : Color.clear, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(Color.appFill, in: Capsule())
+    }
+
+    private var settingsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "근무 추가")
-            if allowManualAdd {
-                VStack(alignment: .leading, spacing: 10) {
-                    Button(isShowingManualAddInput ? "입력 닫기" : "추가하기") {
+            sectionTitle("세부 설정")
+            if store.isPersonal {
+                VStack(alignment: .leading, spacing: 0) {
+                    Toggle(isOn: $applyWeeklyAllowance) {
+                        Text("주휴수당 적용")
+                            .font(.app(.callout, .medium))
+                            .foregroundColor(.appTextPrimary)
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: .appAccent))
+                    .padding(.vertical, 10)
+                    .onChange(of: applyWeeklyAllowance) { _ in
+                        persistLocalPayrollSettings()
+                    }
+
+                    cardDivider
+
+                    Toggle(isOn: $applyNightAllowance) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("야간수당 적용")
+                                .font(.app(.callout, .medium))
+                                .foregroundColor(.appTextPrimary)
+                            Text("22:00~06:00 +50%")
+                                .font(.app(.caption))
+                                .foregroundColor(.appTextSecondary)
+                        }
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: .appAccent))
+                    .padding(.vertical, 10)
+                    .onChange(of: applyNightAllowance) { _ in
+                        persistLocalPayrollSettings()
+                    }
+
+                    cardDivider
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("공제 방식")
+                            .font(.app(.callout, .medium))
+                            .foregroundColor(.appTextPrimary)
+                        chipGroup(
+                            PayrollDeductionType.allCases.map { (value: $0, title: $0.title) },
+                            selection: deductionType
+                        ) { option in
+                            deductionType = option
+                            persistLocalPayrollSettings()
+                        }
+                    }
+                    .padding(.vertical, 13)
+
+                    cardDivider
+
+                    HStack {
+                        Text("월급일")
+                            .font(.app(.callout, .medium))
+                            .foregroundColor(.appTextPrimary)
+                        Spacer()
+                        Picker("월급일", selection: $payday) {
+                            ForEach(1...31, id: \.self) { day in
+                                Text("매월 \(day)일").tag(day)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(.appTextPrimary)
+                        .onChange(of: payday) { _ in
+                            persistLocalPayrollSettings()
+                        }
+                    }
+                    .padding(.vertical, 6)
+
+                    cardDivider
+                    infoRow("정산기간", "매월 1일 ~ 말일")
+                    cardDivider
+                    infoRow("다음 월급일", nextPaydayDateText())
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 4)
+                .background(Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+
+                Text("개인 매장의 세부 설정은 이 기기에서만 저장돼요.")
+                    .font(.app(.caption))
+                    .foregroundColor(.appTextSecondary)
+                    .padding(.horizontal, 4)
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    infoRow("공제 방식", store.deductionType.title)
+                    cardDivider
+                    infoRow("주휴수당", store.applyWeeklyAllowance ? "적용" : "미적용")
+                    cardDivider
+                    infoRow("야간수당", store.applyNightAllowance ? "적용" : "미적용")
+                    cardDivider
+                    infoRow("월급일", "매월 \(store.paydayText)")
+                    cardDivider
+                    infoRow("정산기간", "매월 1일 ~ 말일")
+                    cardDivider
+                    infoRow("다음 월급일", nextPaydayDateText())
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 4)
+                .background(Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+
+                Text("사장님이 설정한 기준이 적용돼요.")
+                    .font(.app(.caption))
+                    .foregroundColor(.appTextSecondary)
+                    .padding(.horizontal, 4)
+            }
+        }
+    }
+
+    private var historyEntryCard: some View {
+        NavigationLink {
+            WorkerStoreHistoryView(
+                storeName: store.name,
+                storeId: store.id,
+                workerId: store.workerId,
+                hourlyWage: store.hourlyWage
+            )
+        } label: {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.appLavenderSoft)
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Image(systemName: "list.bullet")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.appLavender)
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("근무 내역 보기")
+                        .font(.app(.body, .bold))
+                        .foregroundColor(.appTextPrimary)
+                    Text("이 매장의 전체 근무 기록")
+                        .font(.app(.caption))
+                        .foregroundColor(.appTextSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.appTextSecondary)
+            }
+            .padding(16)
+            .background(Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+        }
+        .buttonStyle(PressableRowStyle())
+        .padding(.top, 8)
+    }
+
+    // 근무 직접 추가와 고정 스케줄 (개인 매장만).
+    @ViewBuilder
+    private var workToolsSection: some View {
+        if allowManualAdd {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionTitle("근무 기록")
+                HStack(spacing: 10) {
+                    ActionTile(
+                        title: isShowingManualAddInput ? "입력 닫기" : "근무 추가",
+                        subtitle: "오늘 근무 직접 입력",
+                        systemImage: isShowingManualAddInput ? "xmark" : "plus"
+                    ) {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             isShowingManualAddInput.toggle()
                             if !isShowingManualAddInput {
@@ -347,160 +503,182 @@ struct WorkerCheckInView: View {
                             }
                         }
                     }
-                    .buttonStyle(SecondaryButtonStyle())
+                    if store.isPersonal {
+                        ActionTile(
+                            title: isShowingFixedScheduleInput ? "입력 닫기" : "고정 스케줄",
+                            subtitle: fixedSchedules.isEmpty ? "요일별 반복 등록" : "\(fixedSchedules.count)개 등록됨",
+                            systemImage: isShowingFixedScheduleInput ? "xmark" : "repeat",
+                            tint: .appLavender,
+                            fill: .appLavenderSoft
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isShowingFixedScheduleInput.toggle()
+                                if !isShowingFixedScheduleInput {
+                                    fixedScheduleError = nil
+                                }
+                            }
+                        }
+                    }
                 }
-                .appCard()
 
                 if isShowingManualAddInput {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("출근 시간")
-                                    .font(.app(.caption, .semibold))
-                                    .foregroundColor(.appTextSecondary)
-                                timeInputRow(hour: $startHourInput, minute: $startMinuteInput)
-                            }
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("퇴근 시간")
-                                    .font(.app(.caption, .semibold))
-                                    .foregroundColor(.appTextSecondary)
-                                timeInputRow(hour: $endHourInput, minute: $endMinuteInput)
-                            }
-                        }
-
-                        Text("종료가 출근보다 빠르면 다음날 퇴근으로 계산돼요.")
-                            .font(.app(.caption, .medium))
-                            .foregroundColor(.appTextSecondary)
-
-                        if let manualError {
-                            Text(manualError)
-                                .font(.app(.caption, .medium))
-                                .foregroundColor(.appWarning)
-                        }
-
-                        Button(action: {
-                            Task { await addManualWork() }
-                        }) {
-                            Text(isSavingManual ? "추가 중..." : "근무 추가")
-                        }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .disabled(isSavingManual)
-                        .opacity(isSavingManual ? 0.6 : 1.0)
-                    }
-                    .appCard()
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    manualAddInputCard
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
-            } else {
-                Text("사장님과 연동된 근무는 직접 추가할 수 없어요.")
-                    .font(.app(.caption, .medium))
-                    .foregroundColor(.appTextSecondary)
-                    .appCard()
+
+                if store.isPersonal {
+                    if isShowingFixedScheduleInput {
+                        fixedScheduleInputCard
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                    if !fixedSchedules.isEmpty {
+                        fixedScheduleListCard
+                    }
+                }
             }
+        } else {
+            Text("사장님과 연동된 근무는 직접 추가할 수 없어요.")
+                .font(.app(.caption))
+                .foregroundColor(.appTextSecondary)
+                .padding(.horizontal, 4)
         }
     }
 
-    private var fixedScheduleSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "고정 스케줄")
+    private var manualAddInputCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("오늘 근무 추가")
+                .font(.app(.body, .bold))
+                .foregroundColor(.appTextPrimary)
 
-            VStack(alignment: .leading, spacing: 10) {
-                if fixedSchedules.isEmpty {
-                    Text("아직 등록된 고정 스케줄이 없어요.")
-                        .font(.app(.caption, .medium))
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("출근 시간")
+                        .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(sortedFixedSchedules) { schedule in
-                            HStack(spacing: 10) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("\(weekdayLabel(schedule.weekday))요일")
-                                        .font(.app(.caption, .semibold))
-                                        .foregroundColor(.appTextPrimary)
-                                    Text("\(formatHourMinute(schedule.startHour, schedule.startMinute)) - \(formatHourMinute(schedule.endHour, schedule.endMinute))")
-                                        .font(.app(.caption, .medium))
-                                        .foregroundColor(.appTextSecondary)
-                                }
-                                Spacer()
-                                Button("적용") {
-                                    applyFixedScheduleToManualInput(schedule)
-                                }
-                                .font(.app(.caption, .semibold))
-                                .foregroundColor(.appAccent)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.appAccent.opacity(0.1))
-                                .cornerRadius(10)
-
-                                Button(role: .destructive) {
-                                    removeFixedSchedule(schedule)
-                                } label: {
-                                    Image(systemName: "trash")
-                                        .foregroundColor(.appWarning)
-                                        .padding(6)
-                                }
-                            }
-                            .padding(10)
-                            .background(Color.appFill)
-                            .cornerRadius(12)
-                        }
-                    }
+                    timeInputRow(hour: $startHourInput, minute: $startMinuteInput)
                 }
-
-                Button(isShowingFixedScheduleInput ? "입력 닫기" : "추가하기") {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isShowingFixedScheduleInput.toggle()
-                        if !isShowingFixedScheduleInput {
-                            fixedScheduleError = nil
-                        }
-                    }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("퇴근 시간")
+                        .font(.app(.caption, .semibold))
+                        .foregroundColor(.appTextSecondary)
+                    timeInputRow(hour: $endHourInput, minute: $endMinuteInput)
                 }
-                .buttonStyle(SecondaryButtonStyle())
             }
-            .appCard()
 
-            if isShowingFixedScheduleInput {
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("요일", selection: $fixedWeekday) {
-                        Text("일").tag(0)
-                        Text("월").tag(1)
-                        Text("화").tag(2)
-                        Text("수").tag(3)
-                        Text("목").tag(4)
-                        Text("금").tag(5)
-                        Text("토").tag(6)
-                    }
-                    .pickerStyle(.segmented)
+            Text("종료가 출근보다 빠르면 다음날 퇴근으로 계산돼요.")
+                .font(.app(.caption))
+                .foregroundColor(.appTextSecondary)
 
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("출근 시간")
-                                .font(.app(.caption, .semibold))
-                                .foregroundColor(.appTextSecondary)
-                            timeInputRow(hour: $fixedStartHourInput, minute: $fixedStartMinuteInput)
-                        }
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("퇴근 시간")
-                                .font(.app(.caption, .semibold))
-                                .foregroundColor(.appTextSecondary)
-                            timeInputRow(hour: $fixedEndHourInput, minute: $fixedEndMinuteInput)
-                        }
-                    }
+            if let manualError {
+                Text(manualError)
+                    .font(.app(.caption, .medium))
+                    .foregroundColor(.appWarning)
+            }
 
-                    if let fixedScheduleError {
-                        Text(fixedScheduleError)
-                            .font(.app(.caption, .medium))
-                            .foregroundColor(.appWarning)
-                    }
+            Button(action: {
+                Task { await addManualWork() }
+            }) {
+                Text(isSavingManual ? "추가 중..." : "근무 추가")
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(isSavingManual)
+        }
+        .appCard()
+    }
 
-                    Button("등록하기") {
-                        addFixedSchedule()
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
+    private var fixedScheduleInputCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("고정 스케줄 등록")
+                .font(.app(.body, .bold))
+                .foregroundColor(.appTextPrimary)
+
+            chipGroup(
+                (0...6).map { (value: $0, title: weekdayLabel($0)) },
+                selection: fixedWeekday
+            ) { day in
+                fixedWeekday = day
+            }
+
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("출근 시간")
+                        .font(.app(.caption, .semibold))
+                        .foregroundColor(.appTextSecondary)
+                    timeInputRow(hour: $fixedStartHourInput, minute: $fixedStartMinuteInput)
                 }
-                .appCard()
-                .transition(.move(edge: .top).combined(with: .opacity))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("퇴근 시간")
+                        .font(.app(.caption, .semibold))
+                        .foregroundColor(.appTextSecondary)
+                    timeInputRow(hour: $fixedEndHourInput, minute: $fixedEndMinuteInput)
+                }
+            }
+
+            if let fixedScheduleError {
+                Text(fixedScheduleError)
+                    .font(.app(.caption, .medium))
+                    .foregroundColor(.appWarning)
+            }
+
+            Button("등록하기") {
+                addFixedSchedule()
+            }
+            .buttonStyle(PrimaryButtonStyle())
+        }
+        .appCard()
+    }
+
+    private var fixedScheduleListCard: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(sortedFixedSchedules.enumerated()), id: \.element.id) { index, schedule in
+                if index > 0 {
+                    cardDivider
+                }
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.appLavenderSoft)
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text(weekdayLabel(schedule.weekday))
+                                .font(.app(.callout, .bold))
+                                .foregroundColor(.appLavender)
+                        )
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("매주 \(weekdayLabel(schedule.weekday))요일")
+                            .font(.app(.callout, .bold))
+                            .foregroundColor(.appTextPrimary)
+                        Text("\(formatHourMinute(schedule.startHour, schedule.startMinute)) - \(formatHourMinute(schedule.endHour, schedule.endMinute))")
+                            .font(.app(.caption))
+                            .foregroundColor(.appTextSecondary)
+                    }
+                    Spacer()
+                    Button("적용") {
+                        applyFixedScheduleToManualInput(schedule)
+                    }
+                    .font(.app(.caption, .bold))
+                    .foregroundColor(.appAccent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color.appAccentSoft, in: Capsule())
+                    .buttonStyle(.plain)
+
+                    Button(role: .destructive) {
+                        removeFixedSchedule(schedule)
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.appTextSecondary)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.vertical, 12)
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+        .background(Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
     }
 
 }
@@ -535,6 +713,19 @@ private extension WorkerCheckInView {
 
     func monthNetPayText() -> String {
         formatWon(monthNetPay())
+    }
+
+    // 분 → "3:24" 형태의 큰 근무 시간 표기.
+    func timerText(_ minutes: Int) -> String {
+        String(format: "%d:%02d", minutes / 60, minutes % 60)
+    }
+
+    func paydayDDayText() -> String {
+        let calendar = AppTime.calendar
+        let today = calendar.startOfDay(for: Date())
+        let target = calendar.startOfDay(for: PayrollPayday.nextPaydayDate(payday: payday))
+        let days = calendar.dateComponents([.day], from: today, to: target).day ?? 0
+        return days <= 0 ? "D-Day" : "D-\(days)"
     }
 
     func nextPaydayDateText() -> String {
@@ -633,24 +824,26 @@ private extension WorkerCheckInView {
     }
 
     func timeInputRow(hour: Binding<String>, minute: Binding<String>) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             TextField("시", text: hour)
                 .keyboardType(.numberPad)
+                .font(.app(.body, .semibold))
                 .foregroundColor(.appTextPrimary)
                 .multilineTextAlignment(.center)
-                .padding(10)
+                .padding(.vertical, 12)
                 .background(Color.appFill)
-                .cornerRadius(10)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             Text(":")
                 .font(.app(.callout, .bold))
                 .foregroundColor(.appTextSecondary)
             TextField("분", text: minute)
                 .keyboardType(.numberPad)
+                .font(.app(.body, .semibold))
                 .foregroundColor(.appTextPrimary)
                 .multilineTextAlignment(.center)
-                .padding(10)
+                .padding(.vertical, 12)
                 .background(Color.appFill)
-                .cornerRadius(10)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
     }
 
@@ -1258,36 +1451,54 @@ private struct WorkerStoreHistoryView: View {
                         .appCard()
                 } else if logs.isEmpty {
                     Text("근무 내역이 없어요.")
-                        .font(.app(.caption, .medium))
+                        .font(.app(.callout))
                         .foregroundColor(.appTextSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .appCard()
                 } else {
-                    VStack(spacing: 10) {
-                        ForEach(logs) { log in
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    Text(formatDate(log.check_in_at))
-                                        .font(.app(.caption, .semibold))
-                                        .foregroundColor(.appTextPrimary)
-                                    Spacer()
-                                    StatusPill(text: statusLabel(log.status), color: statusColor(log.status))
-                                }
-                                Text(formatTimeRange(log))
-                                    .font(.app(.caption, .medium))
-                                    .foregroundColor(.appTextSecondary)
-                                HStack {
-                                    Text(formatHours(totalMinutes(log)))
-                                        .font(.app(.caption, .medium))
+                    VStack(spacing: 0) {
+                        ForEach(Array(logs.enumerated()), id: \.element.id) { index, log in
+                            if index > 0 {
+                                Rectangle()
+                                    .fill(Color.appLine)
+                                    .frame(height: 1)
+                            }
+                            HStack(alignment: .center, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 8) {
+                                        Text(formatDate(log.check_in_at))
+                                            .font(.app(.callout, .bold))
+                                            .foregroundColor(.appTextPrimary)
+                                        HStack(spacing: 4) {
+                                            Circle()
+                                                .fill(statusColor(log.status))
+                                                .frame(width: 6, height: 6)
+                                            Text(statusLabel(log.status))
+                                                .font(.app(.caption, .semibold))
+                                                .foregroundColor(statusColor(log.status))
+                                        }
+                                    }
+                                    Text(formatTimeRange(log))
+                                        .font(.app(.caption))
                                         .foregroundColor(.appTextSecondary)
-                                    Spacer()
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 3) {
                                     Text(formatWon(totalPay(log)))
-                                        .font(.app(.caption, .semibold))
+                                        .font(.app(.callout, .bold))
                                         .foregroundColor(.appTextPrimary)
+                                    Text(formatHours(totalMinutes(log)))
+                                        .font(.app(.caption))
+                                        .foregroundColor(.appTextSecondary)
                                 }
                             }
-                            .appInputField()
+                            .padding(.vertical, 13)
                         }
                     }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 4)
+                    .background(Color.appSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                 }
 
                 if let loadError {
@@ -1296,8 +1507,9 @@ private struct WorkerStoreHistoryView: View {
                         .foregroundColor(.appWarning)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
         }
         .appRefreshable {
             await refreshFromUser()

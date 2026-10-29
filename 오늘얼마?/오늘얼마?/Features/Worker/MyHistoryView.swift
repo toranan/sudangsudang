@@ -55,94 +55,67 @@ struct MyHistoryView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionHeader(title: "이번 달 요약")
-                    HStack {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("총 근무 시간")
-                                .font(.app(.caption, .semibold))
-                                .foregroundColor(.appTextSecondary)
-                            Text(monthWorkedText)
-                                .font(.app(.title, .bold))
-                                .foregroundColor(.appTextPrimary)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 6) {
-                            Text("세전 예상")
-                                .font(.app(.caption, .semibold))
-                                .foregroundColor(.appTextSecondary)
-                            Text(monthPayText)
-                                .font(.app(.title, .bold))
-                                .foregroundColor(.appTextPrimary)
-                            Text("세후 예상 \(monthNetPayText)")
-                                .font(.app(.caption, .medium))
-                                .foregroundColor(.appTextSecondary)
-                        }
-                    }
-                    .appCard()
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("이번 달")
+                        .font(.app(.callout, .medium))
+                        .foregroundColor(.appTextSecondary)
+                    Text("내 기록")
+                        .font(.system(size: 26, weight: .heavy))
+                        .tracking(-0.6)
+                        .foregroundColor(.appTextPrimary)
+                }
+                .padding(.horizontal, 4)
+
+                summaryCard
+
+                HStack(spacing: 10) {
+                    statTile(title: "총 근무 시간", value: monthWorkedText)
+                    statTile(title: "세후 예상", value: monthNetPayText, valueColor: .appAccent)
                 }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionHeader(title: "최근 근무 기록")
+                Text("최근 근무 기록")
+                    .font(.system(size: 19, weight: .heavy))
+                    .foregroundColor(.appTextPrimary)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 8)
 
-                    if isLoading && items.isEmpty {
-                        ProgressView()
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .appCard()
-                    } else if items.isEmpty {
-                        Text("근무 기록이 없어요.")
-                            .font(.app(.caption, .medium))
-                            .foregroundColor(.appTextSecondary)
-                            .appCard()
-                    } else {
-                        VStack(spacing: 10) {
-                            ForEach(items) { item in
-                                HStack(alignment: .top, spacing: 12) {
-                                    Circle()
-                                        .fill(Color.appLine)
-                                        .frame(width: 44, height: 44)
-                                        .overlay(
-                                            Image(systemName: "calendar")
-                                                .foregroundColor(.appTextSecondary)
-                                        )
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        HStack(spacing: 8) {
-                                            Text(item.storeName)
-                                                .font(.app(.caption, .semibold))
-                                                .foregroundColor(.appTextPrimary)
-                                            StatusPill(text: item.status, color: item.statusColor)
-                                        }
-                                        Text("\(item.date) · \(item.time)")
-                                            .font(.app(.caption, .medium))
-                                            .foregroundColor(.appTextSecondary)
-                                    }
-                                    Spacer()
-                                    VStack(alignment: .trailing, spacing: 6) {
-                                        Text(item.hours)
-                                            .font(.app(.caption, .semibold))
-                                            .foregroundColor(.appTextPrimary)
-                                        Text(item.pay)
-                                            .font(.app(.caption, .medium))
-                                            .foregroundColor(.appTextSecondary)
-                                    }
-                                }
-                                .padding(12)
-                                .background(Color.appFill)
-                                .cornerRadius(12)
+                if isLoading && items.isEmpty {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .appCard()
+                } else if items.isEmpty {
+                    Text("근무 기록이 없어요.")
+                        .font(.app(.callout))
+                        .foregroundColor(.appTextSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .appCard()
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            if index > 0 {
+                                Rectangle()
+                                    .fill(Color.appLine)
+                                    .frame(height: 1)
                             }
+                            workRow(item)
                         }
                     }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 4)
+                    .background(Color.appSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+                }
 
-                    if let loadError {
-                        Text(loadError)
-                            .font(.app(.caption, .medium))
-                            .foregroundColor(.appWarning)
-                    }
+                if let loadError {
+                    Text(loadError)
+                        .font(.app(.caption, .medium))
+                        .foregroundColor(.appWarning)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
         }
         .appRefreshable {
             await refreshFromUser()
@@ -160,6 +133,86 @@ struct MyHistoryView: View {
         .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
             Task { await loadData() }
         }
+    }
+
+    private var summaryCard: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("이번 달 예상 급여 (세전)")
+                .font(.app(.callout, .medium))
+                .foregroundColor(.white.opacity(0.8))
+            Text(monthPayText)
+                .font(.system(size: 34, weight: .heavy))
+                .tracking(-1)
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 20)
+        .background(Color.appAccent)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
+
+    private func statTile(title: String, value: String, valueColor: Color = .appTextPrimary) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundColor(.appTextSecondary)
+            Text(value)
+                .font(.system(size: 17, weight: .heavy))
+                .foregroundColor(valueColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func workRow(_ item: WorkItem) -> some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.appAccentSoft)
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Text(String(item.storeName.prefix(1)))
+                        .font(.app(.callout, .bold))
+                        .foregroundColor(.appAccent)
+                )
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(item.storeName)
+                        .font(.app(.callout, .bold))
+                        .foregroundColor(.appTextPrimary)
+                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(item.statusColor)
+                            .frame(width: 6, height: 6)
+                        Text(item.status)
+                            .font(.app(.caption, .semibold))
+                            .foregroundColor(item.statusColor)
+                    }
+                }
+                Text("\(item.date) · \(item.time)")
+                    .font(.app(.caption))
+                    .foregroundColor(.appTextSecondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(item.pay)
+                    .font(.app(.callout, .bold))
+                    .foregroundColor(.appTextPrimary)
+                Text(item.hours)
+                    .font(.app(.caption))
+                    .foregroundColor(.appTextSecondary)
+            }
+        }
+        .padding(.vertical, 13)
     }
 
     @MainActor

@@ -187,12 +187,13 @@ struct WorkerHomeView: View {
     private var baseHomeContent: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 14) {
                     headerStrip
                     storePaySection
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
             .appRefreshable {
                 await refreshFromUser()
@@ -200,6 +201,7 @@ struct WorkerHomeView: View {
             .background(Color.appBackground.ignoresSafeArea())
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $deepLinkTargetStore) { store in
                 WorkerCheckInView(store: store)
             }
@@ -231,34 +233,40 @@ struct WorkerHomeView: View {
 
     @ViewBuilder
     private var storePaySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "내 매장")
-
+        VStack(alignment: .leading, spacing: 12) {
             if isLoading && storePays.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity, alignment: .center)
                     .appCard()
             } else if storePays.isEmpty {
-                Text("등록된 매장이 없어요.")
-                    .font(.app(.caption, .medium))
-                    .foregroundColor(.appTextSecondary)
-                    .appCard()
-                Button(action: { isPresentingJoinStore = true }) {
-                    Text("초대코드 입력하기")
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                Button(action: { isPresentingPersonalStore = true }) {
-                    Text("매장 추가하기")
-                }
-                .buttonStyle(SecondaryButtonStyle())
-            } else {
-                VStack(spacing: 14) {
-                    workerStoreDropdown
-
-                    if let selectedStorePay {
-                        selectedStoreSummaryCard(selectedStorePay)
-                        selectedStoreQuickMenu(selectedStorePay)
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("아직 등록된 매장이 없어요")
+                        .font(.app(.headline, .bold))
+                        .foregroundColor(.appTextPrimary)
+                    Text("사장님께 받은 초대코드를 입력하거나, 혼자 쓰는 매장을 직접 추가할 수 있어요.")
+                        .font(.app(.callout))
+                        .foregroundColor(.appTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(action: { isPresentingJoinStore = true }) {
+                        Text("초대코드 입력하기")
                     }
+                    .buttonStyle(PrimaryButtonStyle())
+                    Button(action: { isPresentingPersonalStore = true }) {
+                        Text("매장 추가하기")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+                .appCard()
+            } else {
+                if isStoreDropdownExpanded {
+                    workerStoreDropdown
+                }
+
+                if let selectedStorePay {
+                    selectedStoreSummaryCard(selectedStorePay)
+                    selectedStorePayCard(selectedStorePay)
+                    selectedStoreStatTiles(selectedStorePay)
+                    selectedStoreQuickMenu(selectedStorePay)
                 }
             }
 
@@ -291,102 +299,102 @@ struct WorkerHomeView: View {
         await loadData(force: true)
     }
 
+    // 매장 캡슐을 누르면 펼쳐지는 매장 목록.
     private var workerStoreDropdown: some View {
         VStack(spacing: 10) {
-            if let selectedStorePay {
-                HStack(spacing: 10) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            isStoreDropdownExpanded.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 10) {
-                            workerStoreInfo(selectedStorePay)
-                            Spacer()
-                            Image(systemName: isStoreDropdownExpanded ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.appTextSecondary)
-                        }
-                        .contentShape(Rectangle())
+            VStack(spacing: 0) {
+                let rows = [selectedStorePay].compactMap { $0 } + selectableStorePays
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, store in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(Color.appLine)
+                            .frame(height: 1)
                     }
-                    .buttonStyle(.plain)
-
-                    workerStoreMenu(selectedStorePay)
+                    workerStoreDropdownRow(store, isSelected: store.id == selectedStorePay?.id)
                 }
-                .padding(14)
-                .background(Color.appFill)
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.appAccent.opacity(0.35), lineWidth: 1)
-                )
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+            .background(Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
 
-            if isStoreDropdownExpanded {
-                VStack(spacing: 8) {
-                    ForEach(selectableStorePays) { store in
-                        workerStoreDropdownRow(store)
-                    }
-
-                    Button(action: { isPresentingJoinStore = true }) {
-                        Label("초대코드 입력하기", systemImage: "number")
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
-
-                    Button(action: { isPresentingPersonalStore = true }) {
-                        Label("매장 추가하기", systemImage: "plus")
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
+            HStack(spacing: 10) {
+                ActionTile(
+                    title: "초대코드 입력",
+                    subtitle: "사장님 매장 연결",
+                    systemImage: "number"
+                ) {
+                    isPresentingJoinStore = true
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                ActionTile(
+                    title: "매장 추가",
+                    subtitle: "혼자 기록하기",
+                    systemImage: "plus",
+                    tint: .appLavender,
+                    fill: .appLavenderSoft
+                ) {
+                    isPresentingPersonalStore = true
+                }
             }
         }
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
-    private func workerStoreDropdownRow(_ store: StorePay) -> some View {
-        HStack(spacing: 10) {
+    private func workerStoreDropdownRow(_ store: StorePay, isSelected: Bool) -> some View {
+        HStack(spacing: 12) {
             Button {
                 selectStore(store)
                 withAnimation(.easeInOut(duration: 0.18)) {
                     isStoreDropdownExpanded = false
                 }
             } label: {
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
+                    storeAvatar(store)
                     workerStoreInfo(store)
                     Spacer()
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.appAccent)
+                    }
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableRowStyle())
 
             workerStoreMenu(store)
         }
-        .padding(12)
-        .background(Color.appFill)
-        .cornerRadius(12)
+        .padding(.vertical, 12)
+    }
+
+    private func storeAvatar(_ store: StorePay) -> some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(store.isPersonal ? Color.appLavenderSoft : Color.appAccentSoft)
+            .frame(width: 40, height: 40)
+            .overlay(
+                Text(String(store.name.prefix(1)))
+                    .font(.app(.callout, .bold))
+                    .foregroundColor(store.isPersonal ? .appLavender : .appAccent)
+            )
     }
 
     private func workerStoreInfo(_ store: StorePay) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 Text(store.name)
-                    .font(.app(.body, .semibold))
+                    .font(.app(.body, .bold))
                     .foregroundColor(.appTextPrimary)
                     .lineLimit(1)
 
                 if store.isPersonal {
                     Text("개인")
-                        .font(.app(.caption, .bold))
-                        .foregroundColor(.appAccent)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Color.appAccent.opacity(0.1))
-                        .cornerRadius(10)
+                        .font(.app(.caption, .semibold))
+                        .foregroundColor(.appLavender)
                 }
             }
 
             Text("시급 \(formatWon(store.hourlyWage)) · 월급일 \(store.paydayText)")
-                .font(.app(.caption, .medium))
+                .font(.app(.caption))
                 .foregroundColor(.appTextSecondary)
                 .lineLimit(1)
         }
@@ -402,9 +410,9 @@ struct WorkerHomeView: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.appTextSecondary)
-                .frame(width: 34, height: 34)
+                .frame(width: 32, height: 32)
                 .contentShape(Rectangle())
         }
     }
@@ -413,160 +421,172 @@ struct WorkerHomeView: View {
         selectedStoreId = store.id
     }
 
+    // 오늘 번 돈과 출퇴근 화면으로 가는 검정 버튼.
     private func selectedStoreSummaryCard(_ store: StorePay) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("\(monthTitle(selectedMonth)) 예상 급여")
-                    .font(.app(.caption, .semibold))
-                    .foregroundColor(.appTextSecondary)
-                Spacer()
-                Text(store.monthWorkedText)
-                    .font(.app(.caption, .semibold))
-                    .foregroundColor(.appTextSecondary)
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(store.todayMinutes > 0 ? Color.appAccent : Color.appTextSecondary.opacity(0.5))
+                    .frame(width: 7, height: 7)
+                Text(store.todayMinutes > 0 ? "오늘 \(store.todayWorkedText) 근무" : "오늘 기록된 근무가 없어요")
+                    .font(.app(.caption, .bold))
+                    .foregroundColor(store.todayMinutes > 0 ? .appAccent : .appTextSecondary)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(store.todayMinutes > 0 ? Color.appAccentSoft : Color.appFill, in: Capsule())
 
-            Text(store.monthPayText)
-                .font(.app(.largeTitle, .bold))
+            Text(store.todayPayText)
+                .font(.system(size: 46, weight: .heavy))
+                .tracking(-1.5)
+                .monospacedDigit()
                 .foregroundColor(.appTextPrimary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.6)
+                .contentTransition(.numericText())
+                .padding(.top, 8)
 
-            Divider()
-                .background(Color.appLine)
-
-            HStack {
-                summaryPair(title: "오늘 급여", value: store.todayPayText)
-                Spacer()
-                summaryPair(title: "세후 예상", value: store.monthNetPayText, alignment: .trailing)
-            }
-        }
-        .padding(16)
-        .background(Color.appSurface)
-        .cornerRadius(16)
-    }
-
-    private func summaryPair(title: String, value: String, alignment: HorizontalAlignment = .leading) -> some View {
-        VStack(alignment: alignment, spacing: 4) {
-            Text(title)
-                .font(.app(.caption, .medium))
+            Text("오늘 번 돈")
+                .font(.app(.callout))
                 .foregroundColor(.appTextSecondary)
-            Text(value)
-                .font(.app(.caption, .bold))
-                .foregroundColor(.appTextPrimary)
-        }
-    }
 
-    private func selectedStoreQuickMenu(_ store: StorePay) -> some View {
-        VStack(spacing: 0) {
             NavigationLink {
                 WorkerCheckInView(store: store)
             } label: {
-                workerQuickMenuRow(icon: "timer", title: "출근/퇴근하기")
+                Text("출근 · 퇴근하기")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PrimaryButtonStyle())
+            .padding(.top, 18)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 22)
+        .padding(.top, 24)
+        .padding(.bottom, 22)
+        .background(Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+    }
 
-            Divider()
-                .padding(.leading, 56)
+    private func selectedStorePayCard(_ store: StorePay) -> some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(monthTitle(selectedMonth)) 예상 급여")
+                    .font(.app(.callout, .medium))
+                    .foregroundColor(.white.opacity(0.8))
+                Text(store.monthPayText)
+                    .font(.system(size: 28, weight: .heavy))
+                    .tracking(-0.8)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .contentTransition(.numericText())
+            }
+            Spacer(minLength: 12)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("월급날까지")
+                    .font(.app(.caption, .medium))
+                    .foregroundColor(.white.opacity(0.8))
+                Text(paydayDDayText(store))
+                    .font(.system(size: 20, weight: .heavy))
+                    .foregroundColor(.white)
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 20)
+        .background(Color.appAccent)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
 
+    private func paydayDDayText(_ store: StorePay) -> String {
+        let calendar = AppTime.calendar
+        let today = calendar.startOfDay(for: Date())
+        let payday = calendar.startOfDay(for: PayrollPayday.nextPaydayDate(payday: store.payday))
+        let days = calendar.dateComponents([.day], from: today, to: payday).day ?? 0
+        return days <= 0 ? "D-Day" : "D-\(days)"
+    }
+
+    private func selectedStoreStatTiles(_ store: StorePay) -> some View {
+        HStack(spacing: 10) {
+            statTile(title: "\(monthTitle(selectedMonth)) 근무", value: store.monthWorkedText)
+            statTile(title: "세후 예상", value: store.monthNetPayText, valueColor: .appAccent)
+            statTile(title: "시급", value: formatWon(store.hourlyWage))
+        }
+    }
+
+    private func statTile(title: String, value: String, valueColor: Color = .appTextPrimary) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundColor(.appTextSecondary)
+                .lineLimit(1)
+            Text(value)
+                .font(.system(size: 16, weight: .heavy))
+                .foregroundColor(valueColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func selectedStoreQuickMenu(_ store: StorePay) -> some View {
+        HStack(spacing: 10) {
             NavigationLink {
                 WorkerStoreKnowledgeView(storeId: store.id, storeName: store.name)
             } label: {
-                workerQuickMenuRow(icon: "megaphone.fill", title: "공지 · 매뉴얼")
+                workerQuickMenuRow(icon: "megaphone.fill", title: "공지", subtitle: "가게 소식 보기")
             }
-            .buttonStyle(.plain)
-
-            Divider()
-                .padding(.leading, 56)
+            .buttonStyle(PressableRowStyle())
 
             NavigationLink {
                 WorkerStoreKnowledgeView(
                     storeId: store.id,
                     storeName: store.name,
-                    initialPanel: .chat
+                    initialPanel: .manual
                 )
             } label: {
-                workerQuickMenuRow(icon: "bubble.left.and.bubble.right.fill", title: "챗봇")
+                workerQuickMenuRow(
+                    icon: "book.closed.fill",
+                    title: "매뉴얼",
+                    subtitle: "업무 방법 보기",
+                    tint: .appLavender,
+                    fill: .appLavenderSoft
+                )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableRowStyle())
         }
-        .background(Color.appSurface)
-        .cornerRadius(16)
     }
 
-    private func workerQuickMenuRow(icon: String, title: String) -> some View {
-        HStack {
+    // ActionTile과 같은 모양이지만 NavigationLink 라벨로 쓴다.
+    private func workerQuickMenuRow(
+        icon: String,
+        title: String,
+        subtitle: String,
+        tint: Color = .appAccent,
+        fill: Color = .appAccentSoft
+    ) -> some View {
+        HStack(spacing: 10) {
             Image(systemName: icon)
-                .foregroundColor(.appTextSecondary)
-                .frame(width: 24)
-            Text(title)
-                .font(.app(.body, .medium))
-                .foregroundColor(.appTextPrimary)
-            Spacer()
-            Image(systemName: "chevron.right")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 12, height: 12)
-                .foregroundColor(.appLine)
-        }
-        .padding(16)
-    }
-
-    private func storePayCard(_ store: StorePay) -> some View {
-        NavigationLink {
-            WorkerCheckInView(store: store)
-        } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(store.name)
-                        .font(.app(.caption, .semibold))
-                        .foregroundColor(.appTextSecondary)
-                    Spacer()
-                    Menu {
-                        Button(role: .destructive) {
-                            pendingDeleteStore = store
-                            isShowingDeleteConfirm = true
-                        } label: {
-                            Text("퇴사하기")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .foregroundColor(.appTextSecondary)
-                            .padding(.horizontal, 4)
-                    }
-                }
-                HStack(alignment: .bottom) {
-                    Text(store.monthPayText)
-                        .font(.app(.title, .bold))
-                        .foregroundColor(.appTextPrimary)
-                    Spacer()
-                    Text("\(monthTitle(selectedMonth)) \(store.monthWorkedText)")
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appTextSecondary)
-                }
-                HStack {
-                    Text("오늘 급여")
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appTextSecondary)
-                    Spacer()
-                    Text(store.todayPayText)
-                        .font(.app(.caption, .semibold))
-                        .foregroundColor(.appTextSecondary)
-                }
-                HStack {
-                    Text("세후 예상")
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appTextSecondary)
-                    Spacer()
-                    Text(store.monthNetPayText)
-                        .font(.app(.caption, .semibold))
-                        .foregroundColor(.appTextSecondary)
-                }
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(tint)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.appTextPrimary)
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(.appTextSecondary)
             }
-            .padding(14)
-            .background(Color.appSurface)
-            .cornerRadius(16)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .background(fill)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     @MainActor
@@ -605,49 +625,54 @@ struct WorkerHomeView: View {
     }
 
     private var headerStrip: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Button(action: moveToPreviousMonth) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.appTextSecondary)
-                }
-                Spacer()
-                Text(monthTitle(selectedMonth))
-                    .font(.app(.caption, .semibold))
-                    .foregroundColor(.appTextPrimary)
-                Spacer()
-                Button(action: moveToNextMonth) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.appTextSecondary)
-                }
-            }
-            .padding(.horizontal, 8)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 18)
-                    .onEnded { value in
-                        if value.translation.width <= -30 {
-                            moveToNextMonth()
-                        } else if value.translation.width >= 30 {
-                            moveToPreviousMonth()
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 8) {
+                if let selectedStorePay {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isStoreDropdownExpanded.toggle()
                         }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(selectedStorePay.name)
+                                .font(.app(.callout, .bold))
+                                .foregroundColor(.appTextPrimary)
+                                .lineLimit(1)
+                            Image(systemName: isStoreDropdownExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.appTextSecondary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Color.appSurface, in: Capsule())
                     }
-            )
-
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("총급여")
-                        .font(.app(.caption, .semibold))
-                        .foregroundColor(.appTextSecondary)
-                    Text(totalMonthPayText)
-                        .font(.app(.display, .bold))
-                        .foregroundColor(.appTextPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
+                    .buttonStyle(PressableRowStyle())
                 }
-                Spacer()
+
+                Spacer(minLength: 8)
+
+                if let selectedStorePay {
+                    NavigationLink {
+                        WorkerStoreKnowledgeView(
+                            storeId: selectedStorePay.id,
+                            storeName: selectedStorePay.name,
+                            initialPanel: .chat
+                        )
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("물어보기")
+                                .font(.app(.callout, .bold))
+                        }
+                        .foregroundColor(.appAccent)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Color.appAccentSoft, in: Capsule())
+                    }
+                    .buttonStyle(PressableRowStyle())
+                }
+
                 Menu {
                     Button("로그아웃", role: .destructive) {
                         Task {
@@ -659,25 +684,64 @@ struct WorkerHomeView: View {
                         isShowingDeleteAccountConfirm = true
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 20, weight: .semibold))
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.appTextSecondary)
+                        .frame(width: 36, height: 36)
+                        .background(Color.appSurface, in: Circle())
                 }
             }
 
-            HStack {
-                Text("\(monthTitle(selectedMonth)) 총급여")
-                    .font(.app(.caption, .medium))
-                    .foregroundColor(.appTextSecondary)
-                Spacer()
-                Text("세후 예상 \(totalMonthNetPayText)")
-                    .font(.app(.caption, .semibold))
-                    .foregroundColor(.appTextSecondary)
+            // 좌우로 밀어서 달을 바꾼다.
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(monthTitle(selectedMonth)) 총급여 · 세후 \(totalMonthNetPayText)")
+                        .font(.app(.callout, .medium))
+                        .foregroundColor(.appTextSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Text(totalMonthPayText)
+                        .font(.system(size: 26, weight: .heavy))
+                        .tracking(-0.6)
+                        .foregroundColor(.appTextPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .contentTransition(.numericText())
+                }
+                Spacer(minLength: 12)
+                HStack(spacing: 2) {
+                    Button(action: moveToPreviousMonth) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.appTextSecondary)
+                            .frame(width: 30, height: 30)
+                    }
+                    Text(monthTitle(selectedMonth))
+                        .font(.app(.caption, .bold))
+                        .foregroundColor(.appTextPrimary)
+                    Button(action: moveToNextMonth) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.appTextSecondary)
+                            .frame(width: 30, height: 30)
+                    }
+                }
+                .padding(.horizontal, 2)
+                .background(Color.appSurface, in: Capsule())
             }
+            .padding(.horizontal, 4)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 18)
+                    .onEnded { value in
+                        if value.translation.width <= -30 {
+                            moveToNextMonth()
+                        } else if value.translation.width >= 30 {
+                            moveToPreviousMonth()
+                        }
+                    }
+            )
         }
-        .padding(16)
-        .background(Color.appSurface)
-        .cornerRadius(16)
     }
 
     private var totalMonthPayText: String {

@@ -15,43 +15,87 @@ struct WorkerProfileView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        SectionHeader(title: "내 프로필")
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(profileName)
-                                .font(.app(.title, .bold))
-                                .foregroundColor(.appTextPrimary)
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("내 정보")
+                            .font(.app(.callout, .medium))
+                            .foregroundColor(.appTextSecondary)
+                        Text("내 프로필")
+                            .font(.system(size: 26, weight: .heavy))
+                            .tracking(-0.6)
+                            .foregroundColor(.appTextPrimary)
+                    }
+                    .padding(.horizontal, 4)
 
+                    HStack(spacing: 14) {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.appAccentSoft)
+                            .frame(width: 56, height: 56)
+                            .overlay(
+                                Text(String(profileName.prefix(1)))
+                                    .font(.system(size: 22, weight: .heavy))
+                                    .foregroundColor(.appAccent)
+                            )
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(profileName)
+                                .font(.app(.headline, .bold))
+                                .foregroundColor(.appTextPrimary)
+                                .lineLimit(1)
                             if !profilePhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 Text(profilePhone)
-                                    .font(.app(.caption, .medium))
+                                    .font(.app(.caption))
                                     .foregroundColor(.appTextSecondary)
                             }
                             if !profileEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 Text(profileEmail)
-                                    .font(.app(.caption, .medium))
+                                    .font(.app(.caption))
                                     .foregroundColor(.appTextSecondary)
-                            }
-
-                            Button("프로필 수정") {
-                                isPresentingProfileEdit = true
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                        }
-                        .appCard()
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        SectionHeader(title: "계정")
-                        Button("로그아웃") {
-                            Task {
-                                await SupabaseManager.shared.signOut()
-                                NotificationCenter.default.post(name: .didLogout, object: nil)
+                                    .lineLimit(1)
                             }
                         }
-                        .buttonStyle(SecondaryButtonStyle())
+
+                        Spacer(minLength: 8)
+
+                        Button("수정") {
+                            isPresentingProfileEdit = true
+                        }
+                        .font(.app(.caption, .bold))
+                        .foregroundColor(.appTextPrimary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color.appFill, in: Capsule())
+                        .buttonStyle(.plain)
                     }
+                    .appCard()
+
+                    Text("계정")
+                        .font(.system(size: 19, weight: .heavy))
+                        .foregroundColor(.appTextPrimary)
+                        .padding(.horizontal, 4)
+                        .padding(.top, 8)
+
+                    Button {
+                        Task {
+                            await SupabaseManager.shared.signOut()
+                            NotificationCenter.default.post(name: .didLogout, object: nil)
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.appWarning)
+                            Text("로그아웃")
+                                .font(.app(.body, .semibold))
+                                .foregroundColor(.appWarning)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 16)
+                        .background(Color.appSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+                    }
+                    .buttonStyle(PressableRowStyle())
 
                     if let loadError {
                         Text(loadError)
@@ -59,13 +103,15 @@ struct WorkerProfileView: View {
                             .foregroundColor(.appWarning)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
             .appRefreshable {
                 await refreshFromUser()
             }
             .background(Color.appBackground.ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(isPresented: $isPresentingProfileEdit) {
             ProfileCompletionSheet(

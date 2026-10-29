@@ -22,7 +22,18 @@ struct CreatePersonalStoreView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("혼자 근무를 기록할 매장을 만들어요")
+                            .font(.app(.callout, .medium))
+                            .foregroundColor(.appTextSecondary)
+                        Text("매장 추가하기")
+                            .font(.system(size: 24, weight: .heavy))
+                            .tracking(-0.6)
+                            .foregroundColor(.appTextPrimary)
+                    }
+                    .padding(.horizontal, 4)
+
+                    VStack(alignment: .leading, spacing: 8) {
                         Text("매장명")
                             .font(.app(.caption, .semibold))
                             .foregroundColor(.appTextSecondary)
@@ -34,48 +45,87 @@ struct CreatePersonalStoreView: View {
                                 .onSubmit { Task { await searchPlaces(manualTrigger: true) } }
                                 .foregroundColor(.appTextPrimary)
                                 .appInputField()
-                            Button("검색") {
+                            Button {
                                 Task { await searchPlaces(manualTrigger: true) }
+                            } label: {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundColor(.appOnInk)
+                                    .frame(width: 48, height: 48)
+                                    .background(Color.appInk)
+                                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
                             }
-                            .buttonStyle(SecondaryButtonStyle())
-                            .frame(width: 80)
+                            .buttonStyle(PressableRowStyle())
+                            .accessibilityLabel("검색")
+                        }
+
+                        if !address.isEmpty {
+                            HStack(spacing: 6) {
+                                Image(systemName: "mappin")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text(address)
+                                    .font(.app(.caption, .medium))
+                                    .lineLimit(1)
+                            }
+                            .foregroundColor(.appTextSecondary)
+                            .padding(.top, 2)
+                        }
+
+                        if let searchError {
+                            Text(searchError)
+                                .font(.app(.caption, .medium))
+                                .foregroundColor(.appWarning)
                         }
                     }
-
-                    if let searchError {
-                        Text(searchError)
-                            .font(.app(.caption, .medium))
-                            .foregroundColor(.appWarning)
-                    }
+                    .appCard()
 
                     if isSearching {
                         ProgressView()
                             .frame(maxWidth: .infinity, alignment: .center)
                             .appCard()
                     } else if !searchResults.isEmpty && isSearchExpanded {
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(searchResults) { place in
+                        VStack(spacing: 0) {
+                            ForEach(Array(searchResults.enumerated()), id: \.element.id) { index, place in
+                                if index > 0 {
+                                    Rectangle()
+                                        .fill(Color.appLine)
+                                        .frame(height: 1)
+                                }
                                 Button(action: {
                                     name = place.placeName
                                     address = place.displayAddress
                                     isSearchExpanded = false
                                     hideKeyboard()
                                 }) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(place.placeName)
-                                            .font(.app(.callout, .semibold))
-                                            .foregroundColor(.appTextPrimary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                        Text(place.displayAddress)
-                                            .font(.app(.caption, .medium))
-                                            .foregroundColor(.appTextSecondary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    HStack(spacing: 12) {
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .fill(Color.appAccentSoft)
+                                            .frame(width: 36, height: 36)
+                                            .overlay(
+                                                Image(systemName: "mappin")
+                                                    .font(.system(size: 14, weight: .semibold))
+                                                    .foregroundColor(.appAccent)
+                                            )
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(place.placeName)
+                                                .font(.app(.callout, .bold))
+                                                .foregroundColor(.appTextPrimary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                            Text(place.displayAddress)
+                                                .font(.app(.caption))
+                                                .foregroundColor(.appTextSecondary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
                                     }
-                                    .appInputField()
+                                    .padding(.vertical, 12)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(PressableRowStyle())
                             }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 4)
+                        .background(Color.appSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                     }
 
                     Button(action: {
@@ -86,19 +136,19 @@ struct CreatePersonalStoreView: View {
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .opacity(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
                 }
                 .padding(20)
             }
-            .navigationTitle("매장 추가하기")
+            .background(Color.appBackground.ignoresSafeArea())
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("닫기") { dismiss() }
+                        .foregroundColor(.appTextPrimary)
                 }
             }
         }
-        .background(Color.appBackground.ignoresSafeArea())
         .task(id: name) {
             await debouncedAutoSearch()
         }

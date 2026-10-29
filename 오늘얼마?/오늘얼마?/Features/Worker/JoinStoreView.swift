@@ -17,11 +17,18 @@ struct JoinStoreView: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
-                Text("초대코드 입력하기")
-                    .font(.app(.headline, .bold))
-                    .foregroundColor(.appTextPrimary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("사장님께 받은 코드로 매장을 연결해요")
+                        .font(.app(.callout, .medium))
+                        .foregroundColor(.appTextSecondary)
+                    Text("초대코드 입력하기")
+                        .font(.system(size: 24, weight: .heavy))
+                        .tracking(-0.6)
+                        .foregroundColor(.appTextPrimary)
+                }
+                .padding(.horizontal, 4)
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("초대코드")
                         .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
@@ -29,13 +36,14 @@ struct JoinStoreView: View {
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                         .appInputField()
-                }
 
-                if let error {
-                    Text(error)
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appWarning)
+                    if let error {
+                        Text(error)
+                            .font(.app(.caption, .medium))
+                            .foregroundColor(.appWarning)
+                    }
                 }
+                .appCard()
 
                 Button("추가하기") {
                     let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
@@ -49,15 +57,15 @@ struct JoinStoreView: View {
                 .buttonStyle(PrimaryButtonStyle())
 
                 Button("닫기") { dismiss() }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .buttonStyle(SecondaryButtonStyle(foregroundColor: .appTextSecondary))
 
                 Spacer()
             }
             .padding(20)
-            .navigationTitle("초대코드 입력하기")
-            .navigationBarTitleDisplayMode(.inline)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(Color.appBackground.ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
         }
-        .background(Color.appBackground.ignoresSafeArea())
     }
 }
 

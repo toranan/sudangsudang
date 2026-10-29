@@ -66,7 +66,9 @@ struct WorkerCalendarView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                monthHeader
+
                 if !workers.isEmpty {
                     storePicker
                 } else if isLoadingWorkers {
@@ -75,14 +77,13 @@ struct WorkerCalendarView: View {
                         .appCard()
                 } else {
                     Text("등록된 매장이 없어요.")
-                        .font(.app(.caption, .medium))
+                        .font(.app(.callout))
                         .foregroundColor(.appTextSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .appCard()
                 }
 
                 if !workers.isEmpty {
-                    monthHeader
-
                     calendarGrid
 
                     if let selected = selectedDate,
@@ -90,8 +91,9 @@ struct WorkerCalendarView: View {
                         dayDetail(summary: summary)
                     } else {
                         Text("날짜를 선택하면 근무 내역이 보여요.")
-                            .font(.app(.caption, .medium))
+                            .font(.app(.callout))
                             .foregroundColor(.appTextSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .appCard()
                     }
                 }
@@ -102,8 +104,9 @@ struct WorkerCalendarView: View {
                         .foregroundColor(.appWarning)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
         }
         .appRefreshable {
             await refreshFromUser()
@@ -133,117 +136,167 @@ struct WorkerCalendarView: View {
 
     private var storePicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(workers) { worker in
                     let isSelected = worker.id == selectedWorkerId
                     Button(action: { selectedWorkerId = worker.id }) {
                         Text(worker.stores?.name ?? "매장")
                             .font(.app(.caption, .semibold))
-                            .foregroundColor(isSelected ? .white : .appTextPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(isSelected ? Color.appAccent : Color.appSurface)
-                            .cornerRadius(999)
+                            .foregroundColor(isSelected ? .appOnInk : .appTextSecondary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .background(isSelected ? Color.appInk : Color.appSurface, in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.horizontal, 4)
         }
     }
 
     private var monthHeader: some View {
-        HStack(spacing: 12) {
-            Button(action: { currentMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth }) {
-                Image(systemName: "chevron.left")
+        HStack(alignment: .bottom, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("근무 달력")
+                    .font(.app(.callout, .medium))
+                    .foregroundColor(.appTextSecondary)
+                Text(monthTitle)
+                    .font(.system(size: 26, weight: .heavy))
+                    .tracking(-0.6)
+                    .foregroundColor(.appTextPrimary)
             }
-            .buttonStyle(SecondaryButtonStyle())
-
-            Text(monthTitle)
-                .font(.app(.body, .semibold))
-                .foregroundColor(.appTextPrimary)
-
-            Button(action: { currentMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth }) {
-                Image(systemName: "chevron.right")
-            }
-            .buttonStyle(SecondaryButtonStyle())
 
             Spacer()
 
             if isLoading {
                 ProgressView()
+                    .controlSize(.small)
+            }
+
+            if !workers.isEmpty {
+                HStack(spacing: 2) {
+                    Button(action: { currentMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.appTextPrimary)
+                            .frame(width: 36, height: 36)
+                    }
+                    Button(action: { currentMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth }) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.appTextPrimary)
+                            .frame(width: 36, height: 36)
+                    }
+                }
+                .padding(.horizontal, 2)
+                .background(Color.appSurface, in: Capsule())
             }
         }
+        .padding(.horizontal, 4)
     }
 
     private var calendarGrid: some View {
         let days = makeMonthDays()
-        return VStack(spacing: 8) {
-            HStack {
+        return VStack(spacing: 6) {
+            HStack(spacing: 4) {
                 ForEach(["일","월","화","수","목","금","토"], id: \.self) { d in
                     Text(d)
-                        .font(.app(.caption, .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.appTextSecondary)
                         .frame(maxWidth: .infinity)
                 }
             }
+            .padding(.bottom, 4)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
                 ForEach(days) { item in
                     if let date = item.date {
                         let isSelected = selectedDate.map { calendar.isDate($0, inSameDayAs: date) } ?? false
+                        let isToday = calendar.isDateInToday(date)
                         let summary = summaries.first(where: { calendar.isDate($0.date, inSameDayAs: date) })
                         Button(action: { selectedDate = date }) {
-                            VStack(spacing: 4) {
+                            VStack(spacing: 3) {
                                 Text("\(calendar.component(.day, from: date))")
-                                    .font(.app(.caption, .semibold))
-                                    .foregroundColor(isSelected ? .white : .appTextPrimary)
+                                    .font(.system(size: 15, weight: isToday || isSelected ? .heavy : .semibold))
+                                    .foregroundColor(isSelected ? .appOnInk : (isToday ? .appAccent : .appTextPrimary))
                                 if let summary {
                                     Text(formatWon(summary.totalPay))
-                                        .font(.app(.caption, .semibold))
-                                        .foregroundColor(isSelected ? .white.opacity(0.9) : .appTextSecondary)
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundColor(isSelected ? .appOnInk.opacity(0.8) : .appAccent)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.6)
                                 } else {
                                     Text(" ")
-                                        .font(.app(.caption, .semibold))
+                                        .font(.system(size: 9, weight: .bold))
                                 }
                             }
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .padding(.vertical, 6)
-                            .background(isSelected ? Color.appAccent : Color.appSurface)
-                            .cornerRadius(10)
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                            .padding(.horizontal, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(isSelected ? Color.appInk : (summary != nil ? Color.appAccentSoft : Color.clear))
+                            )
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     } else {
-                        Color.clear.frame(height: 44)
+                        Color.clear.frame(height: 46)
                     }
                 }
             }
         }
-        .appCard()
+        .padding(.horizontal, 14)
+        .padding(.vertical, 18)
+        .background(Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
     }
 
     private func dayDetail(summary: DaySummary) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: dayTitle(summary.date), trailing: "\(formatHours(summary.totalMinutes))")
-            VStack(spacing: 10) {
-                ForEach(summary.rows) { row in
-                    HStack {
-                        Text(formatRange(start: row.start, end: row.end))
-                            .font(.app(.caption, .semibold))
-                            .foregroundColor(.appTextPrimary)
-                        Spacer()
-                        Text(row.statusText)
-                            .font(.app(.caption, .medium))
-                            .foregroundColor(row.statusColor)
-                        Text(row.status == "approved" ? formatWon(row.pay) : "미승인")
-                            .font(.app(.caption, .semibold))
-                            .foregroundColor(.appTextPrimary)
+            HStack(alignment: .firstTextBaseline) {
+                Text(dayTitle(summary.date))
+                    .font(.system(size: 19, weight: .heavy))
+                    .foregroundColor(.appTextPrimary)
+                Spacer()
+                Text(formatHours(summary.totalMinutes))
+                    .font(.app(.callout, .medium))
+                    .foregroundColor(.appTextSecondary)
+            }
+            .padding(.horizontal, 4)
+
+            VStack(spacing: 0) {
+                ForEach(Array(summary.rows.enumerated()), id: \.element.id) { index, row in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(Color.appLine)
+                            .frame(height: 1)
                     }
-                    .appInputField()
+                    HStack(spacing: 10) {
+                        Text(formatRange(start: row.start, end: row.end))
+                            .font(.app(.callout, .bold))
+                            .foregroundColor(.appTextPrimary)
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(row.statusColor)
+                                .frame(width: 6, height: 6)
+                            Text(row.statusText)
+                                .font(.app(.caption, .semibold))
+                                .foregroundColor(row.statusColor)
+                        }
+                        Spacer()
+                        Text(row.status == "approved" ? formatWon(row.pay) : "미승인")
+                            .font(.app(.callout, .bold))
+                            .foregroundColor(row.status == "approved" ? .appTextPrimary : .appTextSecondary)
+                    }
+                    .padding(.vertical, 14)
                 }
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 2)
+            .background(Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
         }
-        .appCard()
+        .padding(.top, 6)
     }
 
     private var selectedWorkerHourlyWage: Double {
@@ -503,7 +556,7 @@ private extension WorkerCalendarView.WorkRow {
         case "approved":
             return .appPositive
         case "pending":
-            return .appTextSecondary
+            return .appCaution
         case "rejected":
             return .appWarning
         default:
