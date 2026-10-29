@@ -86,10 +86,10 @@ extension Color {
         light: UIColor(red: 242/255, green: 244/255, blue: 246/255, alpha: 1),
         dark: UIColor(red: 16/255, green: 17/255, blue: 20/255, alpha: 1)
     )
-    // 카드 안의 입력칸, 보조 버튼 같은 채움 면.
+    // 입력칸, 칩 같은 채움 면. 흰 카드와 회색 배경 어디에 놓여도 보이도록 배경보다 한 단계 진하다.
     static let appFill = dynamic(
-        light: UIColor(red: 242/255, green: 244/255, blue: 246/255, alpha: 1),
-        dark: UIColor(red: 44/255, green: 47/255, blue: 53/255, alpha: 1)
+        light: UIColor(red: 230/255, green: 233/255, blue: 237/255, alpha: 1),
+        dark: UIColor(red: 52/255, green: 56/255, blue: 63/255, alpha: 1)
     )
     static let appSurface = dynamic(
         light: UIColor(red: 1, green: 1, blue: 1, alpha: 1),
@@ -118,7 +118,7 @@ extension Color {
     #else
     static let appAccent = Color(red: 30/255, green: 104/255, blue: 255/255)
     static let appBackground = Color(red: 242/255, green: 244/255, blue: 246/255)
-    static let appFill = Color(red: 242/255, green: 244/255, blue: 246/255)
+    static let appFill = Color(red: 230/255, green: 233/255, blue: 237/255)
     static let appSurface = Color.white
     static let appTextPrimary = Color(red: 27/255, green: 29/255, blue: 33/255)
     static let appTextSecondary = Color(red: 107/255, green: 114/255, blue: 128/255)
@@ -198,7 +198,7 @@ struct SecondaryButtonStyle: ButtonStyle {
                 .foregroundColor(foregroundColor)
                 .padding(.vertical, 16)
                 .frame(maxWidth: .infinity)
-                .background(Color.appFill)
+                .background(foregroundColor.opacity(0.12))
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
         }
     }

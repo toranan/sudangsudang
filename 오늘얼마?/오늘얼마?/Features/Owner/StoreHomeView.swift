@@ -6,12 +6,87 @@ import Supabase
 struct StoreHomeView: View {
     let onNavigateToApproval: () -> Void
 
+    struct HomeWorkerRow: Decodable {
+        let id: UUID
+        let name: String
+        let hourly_wage: Double?
+        let apply_night_allowance: Bool?
+        let is_active: Bool?
+    }
+
+    struct HomeScheduleEntryRow: Decodable {
+        let worker_id: UUID
+        let work_date: String
+        let check_in_time: String
+        let check_out_time: String?
+        let template_id: UUID?
+    }
+
+    struct HomeScheduleTemplateRow: Decodable {
+        let id: UUID
+        let worker_id: UUID
+        let weekday: Int
+        let check_in_time: String
+        let check_out_time: String?
+    }
+
+    struct PlannedShift {
+        let workerId: UUID
+        let name: String
+        let start: Date
+        let end: Date?
+    }
+
+    struct TodayShift: Identifiable {
+        enum Status {
+            case upcoming
+            case working(since: Date)
+            case done
+            case notCheckedIn
+
+            var title: String {
+                switch self {
+                case .upcoming: return "예정"
+                case .working: return "근무 중"
+                case .done: return "퇴근"
+                case .notCheckedIn: return "출근 전"
+                }
+            }
+
+            var color: Color {
+                switch self {
+                case .upcoming: return .appTextSecondary
+                case .working: return .appPositive
+                case .done: return .appAccent
+                case .notCheckedIn: return .appWarning
+                }
+            }
+        }
+
+        let workerId: UUID
+        let name: String
+        let start: Date?
+        let end: Date?
+        let status: Status
+
+        var id: UUID { workerId }
+
+        var timeText: String {
+            let formatter = AppTime.displayFormatter("HH:mm")
+            if case .working(let since) = status, start == nil {
+                return "\(formatter.string(from: since))부터 근무 중"
+            }
+            guard let start else { return "" }
+            let endText = end.map { formatter.string(from: $0) } ?? "--:--"
+            return "\(formatter.string(from: start)) – \(endText)"
+        }
+    }
+
     @State private var stores: [Store] = []
     @State private var selectedStoreId: UUID?
     @State private var isPresentingCreateStore = false
     @State private var isPresentingCreateWorker = false
     @State private var isPresentingInviteSheet = false
-    @State private var isStoreDropdownExpanded = false
     @State private var isLoadingStores = false
     @State private var isLoadingSummary = false
     @State private var isUserRefreshing = false
@@ -23,9 +98,12 @@ struct StoreHomeView: View {
     @State private var isShowingDeleteAccountError = false
     @State private var deleteAccountErrorMessage: String?
 
-    @State private var workingNow: [String] = []
-    @State private var todayMinutes: Int = 0
-    @State private var todayPay: Double = 0
+    @State private var actualPay: Double = 0
+    @State private var projectedPay: Double = 0
+    @State private var workedMinutes: Int = 0
+    @State private var workerCount: Int = 0
+    @State private var pendingCount: Int = 0
+    @State private var todayShifts: [TodayShift] = []
 
     @State private var lastStoresLoadedAt: Date?
     @State private var lastSummaryLoadedAt: Date?
@@ -36,223 +114,35 @@ struct StoreHomeView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
-                // Top Custom Navigation Bar
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(selectedStoreName)
-                            .font(.app(.largeTitle, .bold))
-                            .foregroundColor(.appTextPrimary)
+            VStack(alignment: .leading, spacing: 24) {
+                header
+
+                if isLoadingStores && stores.isEmpty {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .appCard()
+                } else if stores.isEmpty {
+                    emptyStoreCard
+                } else {
+                    if pendingCount > 0 {
+                        pendingBanner
                     }
-                    Spacer()
-                    Menu {
-                        Button("로그아웃", role: .destructive) {
-                            Task {
-                                await SupabaseManager.shared.signOut()
-                                NotificationCenter.default.post(name: .didLogout, object: nil)
-                            }
-                        }
-                        Button("계정 삭제", role: .destructive) {
-                            isShowingDeleteAccountConfirm = true
-                        }
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 22, height: 22)
-                            .foregroundColor(.appTextSecondary)
-                            .padding(10)
-                            .background(Color.appSurface)
-                            .clipShape(Circle())
-                    }
+                    laborCostCard
+                    todaySection
+                    addStaffSection
+                    storeManagementRow
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
 
-                // Main Dashboard Content
-                VStack(spacing: 20) {
-
-                    // Store Section
-                    VStack(alignment: .leading, spacing: 10) {
-                        SectionHeader(title: "내 매장")
-                            .padding(.horizontal, 20)
-
-                        if isLoadingStores && stores.isEmpty {
-                            ProgressView()
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .appCard()
-                                .padding(.horizontal, 20)
-                        } else if stores.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("아직 등록된 매장이 없어요.")
-                                    .font(.app(.callout, .medium))
-                                    .foregroundColor(.appTextSecondary)
-                                Button(action: { isPresentingCreateStore = true }) {
-                                    Text("내 매장 등록하기")
-                                }
-                                .buttonStyle(PrimaryButtonStyle())
-                            }
-                            .appCard()
-                            .padding(.horizontal, 20)
-                        } else {
-                            storeDropdown
-                        }
-
-                        if let storeError {
-                            Text(storeError)
-                                .font(.app(.caption, .medium))
-                                .foregroundColor(.appWarning)
-                                .padding(.horizontal, 20)
-                        }
-                    }
-                    
-                    // 1. Estimated Pay Card
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            Text("이번 달 예상 급여")
-                                .font(.app(.callout, .semibold))
-                                .foregroundColor(.appTextSecondary)
-                            Spacer()
-                        }
-                        
-                        if isLoadingSummary && !didLoadSummary {
-                            ProgressView()
-                                .frame(maxWidth: .infinity, alignment: .center)
-                        } else {
-                            HStack(alignment: .bottom) {
-                                Text(formatWon(todayPay))
-                                    .font(.app(.largeTitle, .bold))
-                                    .foregroundColor(.appTextPrimary)
-                                Spacer()
-                                Text("총 \(formatHours(todayMinutes))")
-                                    .font(.app(.caption, .medium))
-                                    .foregroundColor(.appTextSecondary)
-                                    .padding(.bottom, 6)
-                            }
-                        }
-                        
-                        Divider()
-                            .background(Color.appLine)
-                        
-                        NavigationLink {
-                            if let storeId = selectedStoreId {
-                                OwnerMonthlyDetailView(storeId: storeId)
-                            } else {
-                                Text("매장을 선택해주세요.")
-                                    .font(.app(.callout, .medium))
-                                    .foregroundColor(.appTextSecondary)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(Color.appBackground.ignoresSafeArea())
-                            }
-                        } label: {
-                            HStack {
-                                Text("자세히 보기")
-                                    .font(.app(.caption, .semibold))
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 10, height: 10)
-                            }
-                            .foregroundColor(.appTextSecondary)
-                        }
-                    }
-                    .appCard()
-                    .padding(.horizontal, 20)
-
-                    // 2. Working Now Section
-                    VStack(spacing: 12) {
-                        SectionHeader(title: "현재 근무 중", trailing: "\(workingNow.count)명")
-                            .padding(.horizontal, 20)
-                        
-                        if workingNow.isEmpty {
-                            Text("현재 근무 중인 알바가 없어요.")
-                                .font(.app(.caption, .medium))
-                                .foregroundColor(.appTextSecondary)
-                                .padding(.horizontal, 20)
-                        } else {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    ForEach(workingNow, id: \.self) { name in
-                                        VStack(spacing: 12) {
-                                            Circle()
-                                                .fill(Color.appAccent.opacity(0.1))
-                                                .frame(width: 50, height: 50)
-                                                .overlay(
-                                                    Text(String(name.prefix(1)))
-                                                        .font(.app(.headline, .bold))
-                                                        .foregroundColor(.appAccent)
-                                                )
-                                            Text(name)
-                                                .font(.app(.callout, .medium))
-                                                .foregroundColor(.appTextPrimary)
-                                        }
-                                        .padding(16)
-                                        .frame(width: 100)
-                                        .background(Color.appSurface)
-                                        .cornerRadius(20)
-                                    }
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 10)
-                            }
-                        }
-                    }
-
-                    // 3. Quick Actions Grid
-                    VStack(spacing: 12) {
-                        SectionHeader(title: "빠른 메뉴")
-                            .padding(.horizontal, 20)
-                        
-                        HStack(spacing: 12) {
-                            Button(action: { isPresentingInviteSheet = true }) {
-                                Label("초대하기", systemImage: "number")
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                            
-                            Button(action: {
-                                onNavigateToApproval()
-                            }) {
-                                Label("근무 승인", systemImage: "checkmark.circle.fill")
-                            }
-                            .buttonStyle(PrimaryButtonStyle())
-                        }
-                        .padding(.horizontal, 20)
-                        
-                        // Additional List Actions
-                        VStack(spacing: 0) {
-                            quickMenuRow(icon: "person.crop.circle.badge.plus", title: "알바생 등록하기")
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    guard selectedStoreId != nil else { return }
-                                    isPresentingCreateWorker = true
-                                }
-
-                            Divider()
-                                .padding(.leading, 56)
-
-                            if let selectedStore {
-                                NavigationLink {
-                                    StoreKnowledgeManagementView(
-                                        storeId: selectedStore.id,
-                                        storeName: selectedStore.name
-                                    )
-                                } label: {
-                                    quickMenuRow(icon: "book.closed.fill", title: "가게 관리")
-                                }
-                                .buttonStyle(.plain)
-                            } else {
-                                quickMenuRow(icon: "book.closed.fill", title: "가게 관리")
-                                    .opacity(0.45)
-                            }
-                        }
-                        .background(Color.appSurface)
-                        .cornerRadius(20)
-                        .padding(.horizontal, 20)
-                    }
+                if let storeError {
+                    Text(storeError)
+                        .font(.app(.caption, .medium))
+                        .foregroundColor(.appWarning)
                 }
-                .padding(.bottom, 40)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 10)
+            .padding(.bottom, 40)
+            .animation(.easeOut(duration: 0.2), value: pendingCount)
         }
         .refreshable {
             await refreshFromUser()
@@ -321,138 +211,274 @@ struct StoreHomeView: View {
         stores.first(where: { $0.id == selectedStoreId }) ?? stores.first
     }
 
-    private var selectableStores: [Store] {
-        guard let selectedStore else { return stores }
-        return stores.filter { $0.id != selectedStore.id }
-    }
+    // MARK: - Sections
 
-    private var storeDropdown: some View {
-        VStack(spacing: 10) {
-            if let selectedStore {
-                HStack(spacing: 10) {
+    private var header: some View {
+        HStack(spacing: 12) {
+            Menu {
+                ForEach(stores) { store in
                     Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            isStoreDropdownExpanded.toggle()
-                        }
+                        selectStore(store)
                     } label: {
-                        HStack(spacing: 10) {
-                            storeInfo(selectedStore)
-                            Spacer()
-                            Image(systemName: isStoreDropdownExpanded ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.appTextSecondary)
+                        if store.id == selectedStore?.id {
+                            Label(store.name, systemImage: "checkmark")
+                        } else {
+                            Text(store.name)
                         }
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-
-                    storeDeleteMenu(selectedStore)
                 }
-                .padding(14)
-                .background(Color.appFill)
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.appAccent.opacity(0.35), lineWidth: 1)
-                )
-            }
-
-            if isStoreDropdownExpanded {
-                VStack(spacing: 8) {
-                    ForEach(selectableStores) { store in
-                        storeDropdownRow(store)
-                    }
-
-                    Button(action: { isPresentingCreateStore = true }) {
-                        Label("매장 추가하기", systemImage: "plus")
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
+                Divider()
+                Button {
+                    isPresentingCreateStore = true
+                } label: {
+                    Label("매장 추가", systemImage: "plus")
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .padding(.horizontal, 20)
-    }
-
-    private func storeDropdownRow(_ store: Store) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                selectStore(store)
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    isStoreDropdownExpanded = false
+                if let selectedStore {
+                    Button(role: .destructive) {
+                        pendingDeleteStore = selectedStore
+                        isShowingDeleteConfirm = true
+                    } label: {
+                        Label("이 매장 삭제", systemImage: "trash")
+                    }
                 }
             } label: {
-                HStack(spacing: 10) {
-                    storeInfo(store)
-                    Spacer()
+                HStack(spacing: 6) {
+                    Text(selectedStoreName)
+                        .font(.app(.title, .bold))
+                        .foregroundColor(.appTextPrimary)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.appTextSecondary)
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
 
-            storeDeleteMenu(store)
-        }
-        .padding(12)
-        .background(Color.appFill)
-        .cornerRadius(12)
-    }
+            Spacer()
 
-    private func storeDeleteMenu(_ store: Store) -> some View {
-        Menu {
-            Button(role: .destructive) {
-                pendingDeleteStore = store
-                isShowingDeleteConfirm = true
+            Menu {
+                Button("로그아웃", role: .destructive) {
+                    Task {
+                        await SupabaseManager.shared.signOut()
+                        NotificationCenter.default.post(name: .didLogout, object: nil)
+                    }
+                }
+                Button("계정 삭제", role: .destructive) {
+                    isShowingDeleteAccountConfirm = true
+                }
             } label: {
-                Label("삭제", systemImage: "trash")
+                Image(systemName: "gearshape")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.appTextSecondary)
+                    .frame(width: 40, height: 40)
             }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.appTextSecondary)
-                .frame(width: 34, height: 34)
-                .contentShape(Rectangle())
         }
     }
 
-    private func storeInfo(_ store: Store) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(store.name)
-                .font(.app(.body, .semibold))
+    private var emptyStoreCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("먼저 매장을 등록해 주세요")
+                .font(.app(.headline, .bold))
                 .foregroundColor(.appTextPrimary)
-                .lineLimit(1)
+            Text("매장을 만들면 직원을 초대하고 출퇴근과 급여를 한곳에서 관리할 수 있어요.")
+                .font(.app(.callout))
+                .foregroundColor(.appTextSecondary)
+            Button("매장 등록하기") {
+                isPresentingCreateStore = true
+            }
+            .buttonStyle(PrimaryButtonStyle())
+        }
+        .appCard()
+    }
 
-            if let address = store.address, !address.isEmpty {
-                Text(address)
+    private var pendingBanner: some View {
+        Button(action: onNavigateToApproval) {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                Text("승인 기다리는 근무 \(pendingCount)건")
+                    .font(.app(.body, .semibold))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+            }
+            .foregroundColor(.appAccent)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .background(Color.appAccent.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+        }
+        .buttonStyle(PressableRowStyle())
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    private var laborCostCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(currentMonthText) 예상 인건비")
+                .font(.app(.callout, .semibold))
+                .foregroundColor(.appTextSecondary)
+
+            if isLoadingSummary && !didLoadSummary {
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            } else {
+                Text(formatWon(actualPay + projectedPay))
+                    .font(.app(.display, .bold))
+                    .foregroundColor(.appTextPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .contentTransition(.numericText())
+                Text("지금까지 \(formatWon(actualPay)) · 남은 근무 예정 \(formatWon(projectedPay))")
                     .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+            }
+
+            Divider()
+                .padding(.vertical, 6)
+
+            NavigationLink {
+                if let storeId = selectedStoreId {
+                    OwnerMonthlyDetailView(storeId: storeId)
+                }
+            } label: {
+                HStack {
+                    Text("총 \(formatHours(workedMinutes)) · 직원 \(workerCount)명")
+                        .font(.app(.callout, .medium))
+                        .foregroundColor(.appTextPrimary)
+                    Spacer()
+                    Text("자세히")
+                        .font(.app(.callout, .medium))
+                        .foregroundColor(.appTextSecondary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.appTextSecondary)
+                }
+            }
+            .buttonStyle(PressableRowStyle())
+        }
+        .appCard()
+    }
+
+    private var todaySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "오늘 근무", trailing: todayShifts.isEmpty ? nil : "\(todayShifts.count)명")
+
+            if todayShifts.isEmpty {
+                Text(didLoadSummary ? "오늘 예정된 근무가 없어요." : "불러오는 중이에요.")
+                    .font(.app(.callout))
+                    .foregroundColor(.appTextSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .appCard()
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(todayShifts.enumerated()), id: \.element.id) { index, shift in
+                        if index > 0 {
+                            Divider().padding(.leading, 56)
+                        }
+                        todayShiftRow(shift)
+                    }
+                }
+                .padding(.vertical, 6)
+                .background(Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
             }
         }
     }
 
-    private func quickMenuRow(icon: String, title: String) -> some View {
-        HStack {
-            Image(systemName: icon)
-                .foregroundColor(.appTextSecondary)
-                .frame(width: 24)
-            Text(title)
-                .font(.app(.body, .medium))
-                .foregroundColor(.appTextPrimary)
+    private func todayShiftRow(_ shift: TodayShift) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color.appAccent.opacity(0.1))
+                .frame(width: 36, height: 36)
+                .overlay(
+                    Text(String(shift.name.prefix(1)))
+                        .font(.app(.callout, .bold))
+                        .foregroundColor(.appAccent)
+                )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(shift.name)
+                    .font(.app(.body, .semibold))
+                    .foregroundColor(.appTextPrimary)
+                Text(shift.timeText)
+                    .font(.app(.caption, .medium))
+                    .foregroundColor(.appTextSecondary)
+            }
             Spacer()
-            Image(systemName: "chevron.right")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 12, height: 12)
-                .foregroundColor(.appLine)
+            StatusPill(text: shift.status.title, color: shift.status.color)
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private var addStaffSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "직원 추가")
+            HStack(spacing: 10) {
+                Button {
+                    isPresentingInviteSheet = true
+                } label: {
+                    Label("초대 코드 보내기", systemImage: "paperplane.fill")
+                }
+                .buttonStyle(PrimaryButtonStyle())
+
+                Button {
+                    guard selectedStoreId != nil else { return }
+                    isPresentingCreateWorker = true
+                } label: {
+                    Label("직접 등록", systemImage: "square.and.pencil")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var storeManagementRow: some View {
+        if let selectedStore {
+            NavigationLink {
+                StoreKnowledgeManagementView(
+                    storeId: selectedStore.id,
+                    storeName: selectedStore.name
+                )
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "book.closed.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.appAccent)
+                        .frame(width: 36, height: 36)
+                        .background(Color.appAccent.opacity(0.1))
+                        .clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("가게 관리")
+                            .font(.app(.body, .semibold))
+                            .foregroundColor(.appTextPrimary)
+                        Text("매뉴얼과 공지를 등록하면 챗봇이 대신 답해요")
+                            .font(.app(.caption, .medium))
+                            .foregroundColor(.appTextSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.appTextSecondary)
+                }
+                .appCard()
+            }
+            .buttonStyle(PressableRowStyle())
+        }
+    }
+
+    private var currentMonthText: String {
+        "\(AppTime.calendar.component(.month, from: Date()))월"
     }
 
     private func selectStore(_ store: Store) {
         if selectedStoreId != store.id {
-            todayMinutes = 0
-            todayPay = 0
-            workingNow = []
+            actualPay = 0
+            projectedPay = 0
+            workedMinutes = 0
+            workerCount = 0
+            pendingCount = 0
+            todayShifts = []
             didLoadSummary = false
         }
         selectedStoreId = store.id
@@ -558,66 +584,143 @@ struct StoreHomeView: View {
         }
         do {
             let calendar = AppTime.calendar
-            let start = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
-            let end = calendar.date(byAdding: .month, value: 1, to: start) ?? Date()
+            let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
+            let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? now
+            let todayStart = calendar.startOfDay(for: now)
             let iso = AppTime.iso
-            let rows: [LogRow] = try await SupabaseManager.shared
-                .client
+            let dayFormatter = AppTime.displayFormatter("yyyy-MM-dd")
+            let client = SupabaseManager.shared.client
+
+            // 이번 달 근무 기록, 직원, 남은 날짜 일정, 고정 스케줄을 동시에 받는다.
+            async let logRows: [LogRow] = client
                 .from("work_logs")
                 .select("worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance,workers(name,hourly_wage,apply_night_allowance)")
                 .eq("store_id", value: storeId.uuidString)
-                .gte("check_in_at", value: iso.string(from: start))
-                .lt("check_in_at", value: iso.string(from: end))
+                .gte("check_in_at", value: iso.string(from: monthStart))
+                .lt("check_in_at", value: iso.string(from: monthEnd))
                 .execute()
                 .value
+            async let workerRows: [HomeWorkerRow] = client
+                .from("workers")
+                .select("id,name,hourly_wage,apply_night_allowance,is_active")
+                .eq("store_id", value: storeId.uuidString)
+                .execute()
+                .value
+            async let entryRows: [HomeScheduleEntryRow] = client
+                .from("schedule_entries")
+                .select("worker_id,work_date,check_in_time,check_out_time,template_id")
+                .eq("store_id", value: storeId.uuidString)
+                .gte("work_date", value: dayFormatter.string(from: todayStart))
+                .lt("work_date", value: dayFormatter.string(from: monthEnd))
+                .execute()
+                .value
+            async let templateRows: [HomeScheduleTemplateRow] = client
+                .from("schedule_templates")
+                .select("id,worker_id,weekday,check_in_time,check_out_time,is_active")
+                .eq("store_id", value: storeId.uuidString)
+                .eq("is_active", value: true)
+                .execute()
+                .value
+            let (rows, workers, entries, templates) = try await (logRows, workerRows, entryRows, templateRows)
             guard latestSummaryRequestID == requestID, selectedStoreId == storeId else { return }
+
+            let activeWorkers = Dictionary(
+                uniqueKeysWithValues: workers.filter { $0.is_active ?? true }.map { ($0.id, $0) }
+            )
+            let dateParser = AppTime.isoWithFractionalSeconds
 
             var minutes = 0
             var pay: Double = 0
-            var latestRowByWorker: [UUID: (checkIn: Date, isOpen: Bool, name: String)] = [:]
-            let dateParser = AppTime.isoWithFractionalSeconds
+            var pending = 0
+            var workedWorkers = Set<UUID>()
+            var openSince: [UUID: (date: Date, name: String)] = [:]
+            var loggedToday = Set<UUID>()
 
             for row in rows {
-                let status = row.status ?? "pending"
+                let status = normalizedStatus(row.status)
                 if status == "rejected" { continue }
+                let checkIn = dateParser.date(from: row.check_in_at) ?? iso.date(from: row.check_in_at) ?? now
+                let checkOut = row.check_out_at.flatMap { dateParser.date(from: $0) ?? iso.date(from: $0) }
+                let hasCheckout = !(row.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
 
-                let checkIn = dateParser.date(from: row.check_in_at) ?? iso.date(from: row.check_in_at) ?? Date()
-                let hasCheckoutValue = !(row.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
-                let parsedCheckout = row.check_out_at.flatMap { dateParser.date(from: $0) ?? iso.date(from: $0) }
-
-                if let name = row.workers?.name {
-                    if let prev = latestRowByWorker[row.worker_id] {
-                        if checkIn > prev.checkIn {
-                            latestRowByWorker[row.worker_id] = (checkIn: checkIn, isOpen: !hasCheckoutValue, name: name)
-                        }
-                    } else {
-                        latestRowByWorker[row.worker_id] = (checkIn: checkIn, isOpen: !hasCheckoutValue, name: name)
-                    }
+                if calendar.isDate(checkIn, inSameDayAs: now) {
+                    loggedToday.insert(row.worker_id)
                 }
+                guard hasCheckout else {
+                    let name = row.workers?.name ?? activeWorkers[row.worker_id]?.name ?? "직원"
+                    if (openSince[row.worker_id]?.date ?? .distantPast) < checkIn {
+                        openSince[row.worker_id] = (checkIn, name)
+                    }
+                    continue
+                }
+                if status == "pending" { pending += 1 }
 
-                guard status == "approved", hasCheckoutValue else { continue }
-                // If checkout exists but parser fails, keep totals stable with zero-length fallback.
-                let effectiveCheckOut: Date? = parsedCheckout ?? checkIn
-                let durationMinutes = calcMinutes(checkIn: checkIn, checkOut: effectiveCheckOut)
-                minutes += durationMinutes
-                let wage = row.workers?.hourly_wage ?? 0
+                // 승인 대기 건도 예상 인건비에는 포함한다 (반려만 제외).
+                let effectiveCheckOut = checkOut ?? checkIn
+                minutes += calcMinutes(checkIn: checkIn, checkOut: effectiveCheckOut)
+                workedWorkers.insert(row.worker_id)
                 pay += PayrollCalculator.grossPay(
                     checkIn: checkIn,
                     checkOut: effectiveCheckOut,
                     appliedHourlyWage: row.applied_hourly_wage,
                     appliedNightAllowance: row.applied_night_allowance,
-                    fallbackHourlyWage: wage,
+                    fallbackHourlyWage: row.workers?.hourly_wage ?? 0,
                     fallbackNightAllowance: row.workers?.apply_night_allowance ?? false
                 )
             }
-            let workingNames = latestRowByWorker.values
-                .filter { $0.isOpen }
-                .map { $0.name }
-                .sorted()
 
-            todayMinutes = minutes
-            todayPay = pay
-            workingNow = workingNames
+            let shifts = Self.plannedShifts(
+                from: todayStart,
+                to: monthEnd,
+                entries: entries,
+                templates: templates,
+                workers: activeWorkers
+            )
+
+            // 남은 예정: 오늘 아직 기록이 없는 근무 + 내일부터 말일까지.
+            var projected: Double = 0
+            for shift in shifts {
+                let isToday = calendar.isDate(shift.start, inSameDayAs: now)
+                if isToday && loggedToday.contains(shift.workerId) { continue }
+                guard let end = shift.end, let worker = activeWorkers[shift.workerId] else { continue }
+                projected += PayrollCalculator.grossPay(
+                    checkIn: shift.start,
+                    checkOut: end,
+                    wage: worker.hourly_wage ?? 0,
+                    applyNightAllowance: worker.apply_night_allowance ?? false
+                )
+            }
+
+            var today: [TodayShift] = shifts
+                .filter { calendar.isDate($0.start, inSameDayAs: now) }
+                .map { shift in
+                    let status: TodayShift.Status
+                    if let open = openSince[shift.workerId] {
+                        status = .working(since: open.date)
+                    } else if loggedToday.contains(shift.workerId) {
+                        status = .done
+                    } else if now > shift.start.addingTimeInterval(10 * 60) {
+                        status = .notCheckedIn
+                    } else {
+                        status = .upcoming
+                    }
+                    return TodayShift(workerId: shift.workerId, name: shift.name, start: shift.start, end: shift.end, status: status)
+                }
+            // 일정 없이 출근한 직원도 보여준다.
+            let scheduledToday = Set(today.map(\.workerId))
+            for (workerId, open) in openSince where !scheduledToday.contains(workerId) {
+                today.append(TodayShift(workerId: workerId, name: open.name, start: nil, end: nil, status: .working(since: open.date)))
+            }
+            today.sort { ($0.start ?? .distantPast, $0.name) < ($1.start ?? .distantPast, $1.name) }
+
+            withAnimation(.easeOut(duration: 0.25)) {
+                actualPay = pay
+                projectedPay = projected
+                workedMinutes = minutes
+                workerCount = workedWorkers.count
+                pendingCount = pending
+                todayShifts = today
+            }
             didLoadSummary = true
             self.lastSummaryLoadedAt = now
             self.lastSummaryStoreId = storeId
@@ -629,6 +732,66 @@ struct StoreHomeView: View {
             storeError = AppErrorMessage.userMessage(error)
         }
         #endif
+    }
+
+    // 스케줄 화면과 같은 규칙: 날짜별 일정이 있으면 그것을, 고정 스케줄로 아직 만들어지지 않은 날은 템플릿을 쓴다.
+    private static func plannedShifts(
+        from start: Date,
+        to end: Date,
+        entries: [HomeScheduleEntryRow],
+        templates: [HomeScheduleTemplateRow],
+        workers: [UUID: HomeWorkerRow]
+    ) -> [PlannedShift] {
+        let calendar = AppTime.calendar
+        let dayFormatter = AppTime.displayFormatter("yyyy-MM-dd")
+        var shifts: [PlannedShift] = []
+        var seededTemplateDays = Set<String>()
+
+        for entry in entries {
+            if let templateId = entry.template_id {
+                seededTemplateDays.insert("\(templateId.uuidString)|\(entry.work_date)")
+            }
+            guard let worker = workers[entry.worker_id],
+                  let day = dayFormatter.date(from: entry.work_date),
+                  let shiftStart = combine(day: day, time: entry.check_in_time) else { continue }
+            shifts.append(PlannedShift(
+                workerId: entry.worker_id,
+                name: worker.name,
+                start: shiftStart,
+                end: entry.check_out_time.flatMap { endTime(day: day, start: shiftStart, time: $0) }
+            ))
+        }
+
+        var cursor = start
+        while cursor < end {
+            let weekday = (calendar.component(.weekday, from: cursor) + 6) % 7
+            let workDate = dayFormatter.string(from: cursor)
+            for template in templates where template.weekday == weekday {
+                guard !seededTemplateDays.contains("\(template.id.uuidString)|\(workDate)"),
+                      let worker = workers[template.worker_id],
+                      let shiftStart = combine(day: cursor, time: template.check_in_time) else { continue }
+                shifts.append(PlannedShift(
+                    workerId: template.worker_id,
+                    name: worker.name,
+                    start: shiftStart,
+                    end: template.check_out_time.flatMap { endTime(day: cursor, start: shiftStart, time: $0) }
+                ))
+            }
+            cursor = calendar.date(byAdding: .day, value: 1, to: cursor) ?? end
+        }
+        return shifts
+    }
+
+    private static func combine(day: Date, time: String) -> Date? {
+        let parts = time.split(separator: ":").compactMap { Int($0) }
+        guard parts.count >= 2 else { return nil }
+        return AppTime.calendar.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: day)
+    }
+
+    // 퇴근 시각이 출근보다 이르면 다음 날 퇴근(야간 근무)으로 본다.
+    private static func endTime(day: Date, start: Date, time: String) -> Date? {
+        guard let sameDay = combine(day: day, time: time) else { return nil }
+        return sameDay > start ? sameDay : AppTime.calendar.date(byAdding: .day, value: 1, to: sameDay)
     }
 
     private func calcMinutes(checkIn: Date, checkOut: Date?) -> Int {
@@ -986,7 +1149,7 @@ struct CreateWorkerView: View {
                 Spacer()
             }
             .padding(20)
-            .navigationTitle("알바생 등록")
+            .navigationTitle("직접 직원 등록")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
