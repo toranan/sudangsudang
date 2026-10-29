@@ -84,6 +84,8 @@ struct ScheduleManagementView: View {
     @State private var workers: [WorkerOption] = []
     @State private var templates: [WeeklyTemplateRow] = []
     @State private var entries: [ScheduleEntryRow] = []
+    // 매장·월별로 받아 둔 일정. 달을 넘길 때 먼저 보여주고 뒤에서 새로 받는다.
+    @State private var monthEntriesCache: [String: [ScheduleEntryRow]] = [:]
 
     @State private var currentMonth: Date = Date()
     @State private var selectedDate: Date?
@@ -101,7 +103,6 @@ struct ScheduleManagementView: View {
     @State private var storeScopedRequest = LatestRequest()
     @State private var monthScopedRequest = LatestRequest()
 
-    @State private var isPresentingTemplateManager = false
     @State private var entryEditorContext: EntryEditorContext?
 
     private let cacheTTLSeconds: TimeInterval = 120
@@ -132,8 +133,6 @@ struct ScheduleManagementView: View {
                     storePicker
                 }
 
-                templateSection
-
                 calendarGrid
 
                 dayScheduleSection
@@ -160,31 +159,14 @@ struct ScheduleManagementView: View {
             Task { await loadStoreScopedData(force: true) }
         }
         .onChange(of: currentMonth) { _ in
+            if let storeId = selectedStoreId,
+               let cached = monthEntriesCache["\(storeId.uuidString)|\(monthCacheKey(currentMonth))"] {
+                entries = cached
+            }
             Task { await loadMonthScopedData(force: true) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
             Task { await refresh(force: false) }
-        }
-        .sheet(isPresented: $isPresentingTemplateManager) {
-            TemplateManagementSheet(
-                workers: workers,
-                templates: templates,
-                onSave: { draft, editing in
-                    await saveTemplate(draft: draft, editing: editing)
-                },
-                onDelete: { template in
-                    await deactivateTemplate(template)
-                },
-                workerName: { workerId in
-                    workerName(workerId)
-                },
-                formatTimeRange: { start, end in
-                    formatTimeRange(start: start, end: end)
-                },
-                weekdayLabel: { weekday in
-                    weekdayLabel(weekday)
-                }
-            )
         }
         .sheet(item: $entryEditorContext) { context in
             ScheduleEntryEditorSheet(
@@ -214,18 +196,6 @@ struct ScheduleManagementView: View {
                 }
             }
             .padding(.vertical, 2)
-        }
-    }
-
-    private var templateSection: some View {
-        ActionTile(
-            title: "주간 설정",
-            subtitle: "요일마다 같은 근무를 자동으로 채워요",
-            systemImage: "repeat",
-            tint: .appLavender,
-            fill: .appLavenderSoft
-        ) {
-            isPresentingTemplateManager = true
         }
     }
 
@@ -727,7 +697,10 @@ struct ScheduleManagementView: View {
                 .value
 
             guard isCurrentMonthRequest(requestID, key: key) else { return }
-            entries = rows
+            monthEntriesCache[key] = rows
+            withAnimation(.easeOut(duration: 0.2)) {
+                entries = rows
+            }
 
             if let selectedDate,
                calendar.isDate(selectedDate, equalTo: month, toGranularity: .month) {
@@ -744,110 +717,6 @@ struct ScheduleManagementView: View {
                 return
             }
             guard isCurrentMonthRequest(requestID, key: key) else { return }
-            loadError = AppErrorMessage.userMessage(error)
-        }
-        #endif
-    }
-
-    @MainActor
-    private func saveTemplate(
-        draft: TemplateEditorSheet.Draft,
-        editing: WeeklyTemplateRow?
-    ) async {
-        guard let storeId = selectedStoreId else { return }
-
-        #if canImport(Supabase)
-        do {
-            if let editing {
-                struct UpdatePayload: Encodable {
-                    let worker_id: UUID
-                    let weekday: Int
-                    let check_in_time: String
-                    let check_out_time: String?
-                    let updated_at: String
-                }
-                let payload = UpdatePayload(
-                    worker_id: draft.workerId,
-                    weekday: draft.weekday,
-                    check_in_time: draft.checkInTime,
-                    check_out_time: draft.checkOutTime,
-                    updated_at: AppTime.isoString(from: Date())
-                )
-                _ = try await SupabaseManager.shared
-                    .client
-                    .from("schedule_templates")
-                    .update(payload)
-                    .eq("id", value: editing.id.uuidString)
-                    .execute()
-            } else {
-                struct InsertPayload: Encodable {
-                    let store_id: UUID
-                    let worker_id: UUID
-                    let weekday: Int
-                    let check_in_time: String
-                    let check_out_time: String?
-                    let is_active: Bool
-                    let created_by: UUID
-                }
-                let ownerId = try await SupabaseManager.shared.currentUserId()
-                let payload = InsertPayload(
-                    store_id: storeId,
-                    worker_id: draft.workerId,
-                    weekday: draft.weekday,
-                    check_in_time: draft.checkInTime,
-                    check_out_time: draft.checkOutTime,
-                    is_active: true,
-                    created_by: ownerId
-                )
-                _ = try await SupabaseManager.shared
-                    .client
-                    .from("schedule_templates")
-                    .insert(payload)
-                    .execute()
-            }
-
-            await loadStoreScopedData(force: true)
-            await loadMonthScopedData(force: true)
-        } catch {
-            loadError = AppErrorMessage.userMessage(error)
-        }
-        #endif
-    }
-
-    @MainActor
-    private func deactivateTemplate(_ template: WeeklyTemplateRow) async {
-        #if canImport(Supabase)
-        do {
-            struct UpdatePayload: Encodable {
-                let is_active: Bool
-                let updated_at: String
-            }
-            let payload = UpdatePayload(
-                is_active: false,
-                updated_at: AppTime.isoString(from: Date())
-            )
-
-            _ = try await SupabaseManager.shared
-                .client
-                .from("schedule_templates")
-                .update(payload)
-                .eq("id", value: template.id.uuidString)
-                .execute()
-
-            // Future generated schedules from this template are removed.
-            let todayText = dayFormatter.string(from: calendar.startOfDay(for: Date()))
-            _ = try await SupabaseManager.shared
-                .client
-                .from("schedule_entries")
-                .delete()
-                .eq("template_id", value: template.id.uuidString)
-                .gte("work_date", value: todayText)
-                .execute()
-
-            await loadStoreScopedData(force: true)
-            lastMonthScopedKey = nil
-            lastMonthScopedLoadedAt = nil
-        } catch {
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
@@ -1007,409 +876,6 @@ struct ScheduleManagementView: View {
             endText = "미정"
         }
         return "\(startText) ~ \(endText)"
-    }
-}
-
-private struct TemplateManagementSheet: View {
-    private enum EditorContext: Identifiable {
-        case create
-        case edit(ScheduleManagementView.WeeklyTemplateRow)
-
-        var id: String {
-            switch self {
-            case .create:
-                return "create"
-            case .edit(let template):
-                return "edit:\(template.id.uuidString)"
-            }
-        }
-
-        var template: ScheduleManagementView.WeeklyTemplateRow? {
-            switch self {
-            case .create:
-                return nil
-            case .edit(let template):
-                return template
-            }
-        }
-    }
-
-    let workers: [ScheduleManagementView.WorkerOption]
-    let templates: [ScheduleManagementView.WeeklyTemplateRow]
-    let onSave: (TemplateEditorSheet.Draft, ScheduleManagementView.WeeklyTemplateRow?) async -> Void
-    let onDelete: (ScheduleManagementView.WeeklyTemplateRow) async -> Void
-    let workerName: (UUID) -> String
-    let formatTimeRange: (String, String?) -> String
-    let weekdayLabel: (Int) -> String
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var editorContext: EditorContext?
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack {
-                    ScheduleCloseButton { dismiss() }
-                    Spacer()
-                    Button(action: { editorContext = .create }) {
-                        Label("추가", systemImage: "plus")
-                            .labelStyle(AppButtonLabelStyle())
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.appOnInk)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(Color.appInk)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(PressableRowStyle())
-                    .disabled(workers.isEmpty)
-                    .opacity(workers.isEmpty ? 0.4 : 1.0)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("주간 설정")
-                        .font(.system(size: 26, weight: .heavy))
-                        .tracking(-0.6)
-                        .foregroundColor(.appTextPrimary)
-                    Text("요일마다 정해둔 근무가 스케줄에 자동으로 채워져요.")
-                        .font(.app(.callout))
-                        .foregroundColor(.appTextSecondary)
-                }
-
-                if templates.isEmpty {
-                    Text("주간 설정이 없어요. 추가하면 자동으로 스케줄이 생성돼요.")
-                        .font(.app(.callout, .medium))
-                        .foregroundColor(.appTextSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .appCard()
-                } else {
-                    VStack(spacing: 10) {
-                        ForEach(sortedWeekdays, id: \.self) { weekday in
-                            let dayTemplates = templates(for: weekday)
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack(spacing: 6) {
-                                    Text("\(weekdayLabel(weekday))요일")
-                                        .font(.system(size: 17, weight: .heavy))
-                                        .foregroundColor(.appTextPrimary)
-
-                                    Text("\(dayTemplates.count)")
-                                        .font(.system(size: 17, weight: .heavy))
-                                        .foregroundColor(.appAccent)
-
-                                    Spacer()
-                                }
-                                .padding(.bottom, 4)
-
-                                ForEach(Array(dayTemplates.enumerated()), id: \.element.id) { index, template in
-                                    if index > 0 {
-                                        Rectangle()
-                                            .fill(Color.appLine)
-                                            .frame(height: 1)
-                                    }
-                                    templateRow(template)
-                                }
-                            }
-                            .appCard()
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 18)
-            .padding(.bottom, 24)
-        }
-        .background(Color.appBackground.ignoresSafeArea())
-        .sheet(item: $editorContext) { context in
-            TemplateEditorSheet(
-                workers: workers,
-                initialTemplate: context.template,
-                onSave: { draft in
-                    Task {
-                        await onSave(draft, context.template)
-                    }
-                }
-            )
-        }
-    }
-
-    private func templateRow(_ template: ScheduleManagementView.WeeklyTemplateRow) -> some View {
-        let name = template.workers?.name ?? workerName(template.worker_id)
-        return HStack(spacing: 12) {
-            Text(String(name.prefix(1)))
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(.appLavender)
-                .frame(width: 40, height: 40)
-                .background(Color.appLavenderSoft)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.appTextPrimary)
-                Text(formatTimeRange(template.check_in_time, template.check_out_time))
-                    .font(.app(.caption))
-                    .foregroundColor(.appTextSecondary)
-            }
-
-            Spacer()
-
-            Menu {
-                Button("수정") {
-                    editorContext = .edit(template)
-                }
-                Button("삭제", role: .destructive) {
-                    Task { await onDelete(template) }
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.appTextSecondary)
-                    .frame(width: 32, height: 32)
-            }
-        }
-        .padding(.vertical, 10)
-    }
-
-    private var sortedWeekdays: [Int] {
-        Array(groupedTemplates.keys).sorted()
-    }
-
-    private var groupedTemplates: [Int: [ScheduleManagementView.WeeklyTemplateRow]] {
-        Dictionary(grouping: templates, by: \.weekday)
-    }
-
-    private func templates(for weekday: Int) -> [ScheduleManagementView.WeeklyTemplateRow] {
-        (groupedTemplates[weekday] ?? []).sorted { lhs, rhs in
-            if lhs.check_in_time == rhs.check_in_time {
-                return workerName(lhs.worker_id) < workerName(rhs.worker_id)
-            }
-            return lhs.check_in_time < rhs.check_in_time
-        }
-    }
-}
-
-private struct TemplateEditorSheet: View {
-    struct Draft {
-        let workerId: UUID
-        let weekday: Int
-        let checkInTime: String
-        let checkOutTime: String?
-    }
-
-    let workers: [ScheduleManagementView.WorkerOption]
-    let initialTemplate: ScheduleManagementView.WeeklyTemplateRow?
-    let onSave: (Draft) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var workerId: UUID?
-    @State private var weekday: Int = 1
-    @State private var startHour: String = ""
-    @State private var startMinute: String = ""
-    @State private var endHour: String = ""
-    @State private var endMinute: String = ""
-    @State private var error: String?
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    ScheduleCloseButton { dismiss() }
-
-                    Text(initialTemplate == nil ? "주간 설정 추가" : "주간 설정 수정")
-                        .font(.system(size: 26, weight: .heavy))
-                        .tracking(-0.6)
-                        .foregroundColor(.appTextPrimary)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        ScheduleFieldLabel(text: "요일")
-                        HStack(spacing: 6) {
-                            ForEach(Array(["일", "월", "화", "수", "목", "금", "토"].enumerated()), id: \.offset) { index, label in
-                                let isSelected = weekday == index
-                                Button(action: { weekday = index }) {
-                                    Text(label)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(isSelected ? .appOnInk : .appTextSecondary)
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 40)
-                                        .background(isSelected ? Color.appInk : Color.appFill)
-                                        .clipShape(Circle())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-
-                    timeInputSection
-
-                    if let error {
-                        Text(error)
-                            .font(.app(.caption, .medium))
-                            .foregroundColor(.appWarning)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 24)
-            }
-            .scrollDismissesKeyboard(.interactively)
-
-            Button(action: save) {
-                Text(initialTemplate == nil ? "템플릿 추가" : "템플릿 저장")
-            }
-            .buttonStyle(PrimaryButtonStyle())
-            .disabled(workers.isEmpty)
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-            .background(Color.appSurface)
-        }
-        .background(Color.appSurface.ignoresSafeArea())
-        .task {
-            applyInitialValue()
-        }
-    }
-
-    private var timeInputSection: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 8) {
-                ScheduleFieldLabel(text: "근무자")
-
-                if workers.isEmpty {
-                    Text("등록된 알바가 없어요. 먼저 알바관리에서 알바를 등록해주세요.")
-                        .font(.app(.callout))
-                        .foregroundColor(.appTextSecondary)
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.appFill)
-                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(workers) { worker in
-                                ScheduleChip(
-                                    title: worker.name,
-                                    isSelected: (workerId ?? workers.first?.id) == worker.id
-                                ) {
-                                    workerId = worker.id
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ScheduleFieldLabel(text: "출근")
-                        timeField(hour: $startHour, minute: $startMinute)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        ScheduleFieldLabel(text: "퇴근 (선택)")
-                        timeField(hour: $endHour, minute: $endMinute)
-                    }
-                }
-
-                Text("퇴근 시간은 비워둘 수 있어요.")
-                    .font(.app(.caption))
-                    .foregroundColor(.appTextSecondary)
-            }
-        }
-    }
-
-    private func timeField(hour: Binding<String>, minute: Binding<String>) -> some View {
-        HStack(spacing: 2) {
-            TextField("시", text: hour)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.center)
-            Text(":")
-                .foregroundColor(.appTextSecondary)
-            TextField("분", text: minute)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.center)
-        }
-        .font(.system(size: 20, weight: .bold))
-        .foregroundColor(.appTextPrimary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 14)
-        .background(Color.appFill)
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
-    }
-
-    private func applyInitialValue() {
-        workerId = initialTemplate?.worker_id ?? workers.first?.id
-        weekday = initialTemplate?.weekday ?? 1
-
-        let start = parseTime(initialTemplate?.check_in_time)
-        startHour = start.hour
-        startMinute = start.minute
-
-        let end = parseTime(initialTemplate?.check_out_time)
-        endHour = end.hour
-        endMinute = end.minute
-    }
-
-    private func parseTime(_ raw: String?) -> (hour: String, minute: String) {
-        guard let raw else { return ("", "") }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let comps = trimmed.split(separator: ":")
-        guard comps.count >= 2 else { return ("", "") }
-        return (String(comps[0]), String(comps[1]))
-    }
-
-    private func save() {
-        error = nil
-
-        guard let workerId else {
-            error = "근무자를 선택해주세요."
-            return
-        }
-
-        guard let checkInTime = buildRequiredTime(hour: startHour, minute: startMinute) else {
-            error = "출근 시간을 올바르게 입력해주세요."
-            return
-        }
-
-        let checkOut = buildOptionalTime(hour: endHour, minute: endMinute)
-        guard checkOut.isValid else {
-            error = "퇴근 시간을 올바르게 입력해주세요."
-            return
-        }
-
-        onSave(
-            Draft(
-                workerId: workerId,
-                weekday: weekday,
-                checkInTime: checkInTime,
-                checkOutTime: checkOut.value
-            )
-        )
-        dismiss()
-    }
-
-    private func buildRequiredTime(hour: String, minute: String) -> String? {
-        guard let h = Int(hour.filter { $0.isNumber }),
-              let m = Int(minute.filter { $0.isNumber }),
-              (0...23).contains(h),
-              (0...59).contains(m) else {
-            return nil
-        }
-        return String(format: "%02d:%02d:00", h, m)
-    }
-
-    private func buildOptionalTime(hour: String, minute: String) -> (isValid: Bool, value: String?) {
-        let hText = hour.trimmingCharacters(in: .whitespacesAndNewlines)
-        let mText = minute.trimmingCharacters(in: .whitespacesAndNewlines)
-        if hText.isEmpty && mText.isEmpty {
-            return (true, nil)
-        }
-        guard let built = buildRequiredTime(hour: hour, minute: minute) else {
-            return (false, nil)
-        }
-        return (true, built)
     }
 }
 

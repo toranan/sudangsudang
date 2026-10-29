@@ -516,14 +516,11 @@ final class SupabaseManager {
             .eq("store_id", value: storeId.uuidString)
             .gt("expires_at", value: AppTime.iso.string(from: longLivedAfter))
             .order("expires_at", ascending: false)
-            .limit(1)
+            .limit(20)
             .execute()
             .value
-        if let existing = rows.first {
-            // 예전 형식(영문 섞임, 8자리) 코드는 6자리 숫자 코드로 바꿔 준다. 바꾸지 못하면 기존 코드를 그대로 쓴다.
-            guard existing.token.allSatisfy(\.isNumber), existing.token.count == Self.storeCodeLength else {
-                return (try? await reissueStoreCode(storeId: storeId)) ?? existing.token
-            }
+        // 6자리 숫자 코드만 매장 코드로 쓴다. 예전 형식(영문 섞임, 8자리)만 있으면 새 6자리 코드를 만든다.
+        if let existing = rows.first(where: { $0.token.count == Self.storeCodeLength && $0.token.allSatisfy(\.isNumber) }) {
             return existing.token
         }
         return try await createInvite(storeId: storeId, expiresAt: Self.storeCodeExpiry, codeLength: Self.storeCodeLength, alphabet: Self.storeCodeAlphabet).token

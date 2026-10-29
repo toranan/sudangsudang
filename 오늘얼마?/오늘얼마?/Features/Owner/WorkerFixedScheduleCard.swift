@@ -175,9 +175,17 @@ struct WorkerFixedScheduleCard: View {
 
             let kept = templates.filter { days.contains($0.weekday) }
             if !kept.isEmpty {
+                let keptIds = kept.map(\.id.uuidString)
+                let times = UpdateTimes(check_in_time: startTime, check_out_time: endTime, updated_at: now)
                 try await client.from("schedule_templates")
-                    .update(UpdateTimes(check_in_time: startTime, check_out_time: endTime, updated_at: now))
-                    .in("id", values: kept.map(\.id.uuidString))
+                    .update(times)
+                    .in("id", values: keptIds)
+                    .execute()
+                // 이미 달력에 채워진 앞으로의 일정도 새 시간으로 맞춘다.
+                try await client.from("schedule_entries")
+                    .update(times)
+                    .in("template_id", values: keptIds)
+                    .gte("work_date", value: AppTime.displayFormatter("yyyy-MM-dd").string(from: Date()))
                     .execute()
             }
 
