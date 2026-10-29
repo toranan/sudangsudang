@@ -93,6 +93,8 @@ struct WorkerPayrollSettingsView: View {
     @State private var nightChoice = WorkerPayrollSettingsView.storeChoice
     @State private var deductionChoice = WorkerPayrollSettingsView.storeChoice
     @State private var payday = PayrollLocalSettings.defaultPayday
+    @State private var memo = ""
+    @State private var savedMemo = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -101,12 +103,8 @@ struct WorkerPayrollSettingsView: View {
                     .frame(maxWidth: .infinity, minHeight: 120)
             } else {
                 settingsCard
-                if !isLegacy {
-                    Text("‘매장 기본’은 설정 탭의 매장 기본값을 따라가요.")
-                        .font(.app(.caption))
-                        .foregroundColor(.appTextSecondary)
-                        .padding(.horizontal, 4)
-                }
+                WorkerFixedScheduleCard(workerId: workerId, storeId: storeId)
+                memoCard
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.app(.caption, .medium))
@@ -126,24 +124,50 @@ struct WorkerPayrollSettingsView: View {
 
     private var settingsCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            row("시급") {
-                ChoiceChips(options: choices([("custom", "직접")]), selected: wageChoice) { wageChoice = $0 }
-            }
-            if wageChoice == Self.storeChoice, let wage = defaults?.default_hourly_wage {
-                detailLine("\(Int(wage).formatted())원")
-            } else {
-                HStack(spacing: 6) {
-                    Spacer()
-                    TextField("10320", text: $wageInput)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .font(.app(.body, .bold))
-                        .frame(width: 110)
-                    Text("원")
-                        .font(.app(.callout))
-                        .foregroundColor(.appTextSecondary)
+            if wageChoice == Self.storeChoice, !isLegacy {
+                // 매장 기본을 따를 때는 한 줄로 보여주고, 누르면 이 직원만 다르게 입력한다.
+                Button {
+                    wageInput = String(Int(defaults?.default_hourly_wage ?? AppConfig.defaultHourlyWage))
+                    wageChoice = "custom"
+                } label: {
+                    row("시급") {
+                        HStack(spacing: 6) {
+                            Text("매장 기본")
+                                .font(.app(.callout))
+                                .foregroundColor(.appTextSecondary)
+                            Text("\(Int(defaults?.default_hourly_wage ?? AppConfig.defaultHourlyWage).formatted())원")
+                                .font(.app(.callout, .bold))
+                                .foregroundColor(.appTextPrimary)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.appTextSecondary)
+                        }
+                    }
+                    .contentShape(Rectangle())
                 }
-                .padding(.bottom, 10)
+                .buttonStyle(PressableRowStyle())
+            } else {
+                row("시급") {
+                    HStack(spacing: 6) {
+                        if !isLegacy {
+                            Button("매장 기본") { wageChoice = Self.storeChoice }
+                                .font(.app(.caption, .semibold))
+                                .foregroundColor(.appTextSecondary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.appFill, in: Capsule())
+                                .buttonStyle(.plain)
+                        }
+                        TextField("10320", text: $wageInput)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .font(.app(.callout, .bold))
+                            .frame(width: 80)
+                        Text("원")
+                            .font(.app(.callout))
+                            .foregroundColor(.appTextSecondary)
+                    }
+                }
                 MinimumWageHint(input: wageInput)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.bottom, 8)
@@ -173,8 +197,6 @@ struct WorkerPayrollSettingsView: View {
                             .foregroundColor(.appTextSecondary)
                     }
                     .padding(.bottom, 10)
-                } else if breakChoice == Self.storeChoice {
-                    detailLine(storeBreakText)
                 }
                 divider
             }
@@ -182,16 +204,10 @@ struct WorkerPayrollSettingsView: View {
             row("주휴수당") {
                 ChoiceChips(options: choices([("on", "지급"), ("off", "미지급")]), selected: weeklyChoice) { weeklyChoice = $0 }
             }
-            if weeklyChoice == Self.storeChoice {
-                detailLine(onOffText(defaults?.default_apply_weekly_allowance))
-            }
             divider
 
             row("야간수당") {
                 ChoiceChips(options: choices([("on", "지급"), ("off", "미지급")]), selected: nightChoice) { nightChoice = $0 }
-            }
-            if nightChoice == Self.storeChoice {
-                detailLine(onOffText(defaults?.default_apply_night_allowance))
             }
             divider
 
@@ -200,9 +216,6 @@ struct WorkerPayrollSettingsView: View {
                     options: choices(PayrollDeductionType.allCases.map { ($0.rawValue, shortDeductionTitle($0)) }),
                     selected: deductionChoice
                 ) { deductionChoice = $0 }
-            }
-            if deductionChoice == Self.storeChoice {
-                detailLine(defaults?.default_deduction_type.flatMap(PayrollDeductionType.init(rawValue:)).map(shortDeductionTitle) ?? "3.3%")
             }
             divider
 
@@ -249,13 +262,24 @@ struct WorkerPayrollSettingsView: View {
         .padding(.vertical, 12)
     }
 
-    // 매장 기본을 고른 항목 아래에 실제로 적용되는 값을 작게 보여준다.
-    private func detailLine(_ text: String) -> some View {
-        Text("매장 기본 · \(text)")
-            .font(.app(.caption))
-            .foregroundColor(.appTextSecondary)
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.bottom, 10)
+    private var memoCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("메모")
+                    .font(.app(.callout, .semibold))
+                    .foregroundColor(.appTextPrimary)
+                Spacer()
+                Text("사장님만 볼 수 있어요")
+                    .font(.app(.caption))
+                    .foregroundColor(.appTextSecondary)
+            }
+            TextField("메모를 남겨보세요", text: $memo, axis: .vertical)
+                .font(.app(.callout))
+                .lineLimit(2...6)
+        }
+        .padding(18)
+        .background(Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
     }
 
     private func choices(_ own: [(value: String, title: String)]) -> [(value: String, title: String)] {
@@ -274,18 +298,6 @@ struct WorkerPayrollSettingsView: View {
         type == .withholding ? "3.3%" : "4대보험"
     }
 
-    private func onOffText(_ value: Bool?) -> String {
-        (value ?? false) ? "지급" : "미지급"
-    }
-
-    private var storeBreakText: String {
-        let policy = PayrollBreakPolicy(rawOrNone: defaults?.default_break_policy)
-        if policy == .custom, let minutes = defaults?.default_break_minutes {
-            return "근무마다 \(minutes)분"
-        }
-        return policy.title
-    }
-
     // MARK: - Data
 
     @MainActor
@@ -294,6 +306,7 @@ struct WorkerPayrollSettingsView: View {
         isLoading = true
         defer { isLoading = false }
         let client = SupabaseManager.shared.client
+        await loadMemo()
         do {
             async let termsTask: WorkerTerms = client
                 .from("workers")
@@ -324,6 +337,22 @@ struct WorkerPayrollSettingsView: View {
             guard !AppErrorMessage.isCancellation(error) else { return }
             await loadLegacy()
         }
+        #endif
+    }
+
+    @MainActor
+    private func loadMemo() async {
+        #if canImport(Supabase)
+        struct NoteRow: Decodable { let body: String }
+        let rows: [NoteRow] = (try? await SupabaseManager.shared.client
+            .from("worker_notes")
+            .select("body")
+            .eq("worker_id", value: workerId.uuidString)
+            .limit(1)
+            .execute()
+            .value) ?? []
+        memo = rows.first?.body ?? ""
+        savedMemo = memo
         #endif
     }
 
@@ -407,6 +436,25 @@ struct WorkerPayrollSettingsView: View {
                     ))
                     .eq("id", value: workerId.uuidString)
                     .execute()
+            }
+            let trimmedMemo = memo.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedMemo != savedMemo {
+                struct NoteUpsert: Encodable {
+                    let worker_id: UUID
+                    let store_id: UUID
+                    let body: String
+                    let updated_at: String
+                }
+                try await SupabaseManager.shared.client
+                    .from("worker_notes")
+                    .upsert(NoteUpsert(
+                        worker_id: workerId,
+                        store_id: storeId,
+                        body: trimmedMemo,
+                        updated_at: AppTime.isoString(from: Date())
+                    ))
+                    .execute()
+                savedMemo = trimmedMemo
             }
             Haptics.success()
             savedMessage = "저장했어요"

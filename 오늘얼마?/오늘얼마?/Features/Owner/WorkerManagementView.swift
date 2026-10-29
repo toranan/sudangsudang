@@ -1044,14 +1044,28 @@ struct WorkerDetailSheet: View {
                     Text(worker.name)
                         .font(.system(size: 22, weight: .heavy))
                         .foregroundColor(.appTextPrimary)
-                    if let phone = worker.phone, !phone.isEmpty {
-                        Text(phone)
+                    if !headerSubtitle.isEmpty {
+                        Text(headerSubtitle)
                             .font(.app(.caption))
                             .foregroundColor(.appTextSecondary)
+                            .lineLimit(1)
                     }
                 }
+                Spacer(minLength: 8)
+                Button(isProcessingRetirement ? "처리 중..." : "퇴사 처리") {
+                    isShowingRetirementConfirm = true
+                }
+                .font(.app(.callout, .semibold))
+                .foregroundColor(.appWarning)
+                .disabled(isProcessingRetirement)
             }
             .padding(.top, 8)
+
+            if let retirementError {
+                Text(retirementError)
+                    .font(.app(.caption, .medium))
+                    .foregroundColor(.appWarning)
+            }
 
             ChoiceChips(
                 options: WorkerManagementView.DetailTab.visibleCases.map { ($0.rawValue, $0.rawValue) },
@@ -1173,8 +1187,8 @@ struct WorkerDetailSheet: View {
             }
             Button("취소", role: .cancel) { pendingDeleteLog = nil }
         }
-        .alert("퇴사처리하시겠습니까?", isPresented: $isShowingRetirementConfirm) {
-            Button("퇴사처리", role: .destructive) {
+        .alert("\(worker.name)님을 퇴사 처리할까요?", isPresented: $isShowingRetirementConfirm) {
+            Button("퇴사 처리", role: .destructive) {
                 Task { await processRetirement() }
             }
             Button("취소", role: .cancel) {}
@@ -1246,23 +1260,23 @@ struct WorkerDetailSheet: View {
             .buttonStyle(SecondaryButtonStyle())
             .disabled(isSavingRating)
             .opacity(isSavingRating ? 0.6 : 1.0)
-
-            if let retirementError {
-                Text(retirementError)
-                    .font(.app(.caption, .medium))
-                    .foregroundColor(.appWarning)
-            }
-
-            Button(action: {
-                isShowingRetirementConfirm = true
-            }) {
-                Text(isProcessingRetirement ? "처리 중..." : "퇴사처리")
-            }
-            .buttonStyle(PrimaryButtonStyle(backgroundColor: .appWarning))
-            .disabled(isProcessingRetirement || isSavingRating)
-            .opacity((isProcessingRetirement || isSavingRating) ? 0.6 : 1.0)
         }
         .appCard()
+    }
+
+    // "2026.09.01부터 함께 · 010-1234-5678"
+    private var headerSubtitle: String {
+        var parts: [String] = []
+        if let joined = worker.joined_at,
+           let date = AppTime.isoWithFractionalSeconds.date(from: joined)
+            ?? AppTime.iso.date(from: joined)
+            ?? AppTime.displayFormatter("yyyy-MM-dd").date(from: String(joined.prefix(10))) {
+            parts.append("\(AppTime.displayFormatter("yyyy.MM.dd").string(from: date))부터 함께")
+        }
+        if let phone = worker.phone, !phone.isEmpty {
+            parts.append(phone)
+        }
+        return parts.joined(separator: " · ")
     }
 
     private var netView: some View {
