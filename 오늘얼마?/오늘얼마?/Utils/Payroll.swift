@@ -261,7 +261,7 @@ enum PayrollCalculator {
     }
 }
 
-struct PayrollLocalSettings: Codable {
+struct PayrollLocalSettings: Codable, Equatable {
     var applyWeeklyAllowance: Bool
     var deductionType: PayrollDeductionType
     var applyNightAllowance: Bool

@@ -27,7 +27,7 @@ struct OwnerWorkerLogsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(title: workerName, trailing: "이번 달 근무")
 
-                if isLoading {
+                if isLoading && logs.isEmpty {
                     ProgressView()
                         .frame(maxWidth: .infinity, alignment: .center)
                         .appCard()

@@ -271,7 +271,6 @@ struct WorkerCheckInView: View {
         .refreshable {
             await loadCurrentLog()
             await loadMonthLogsForNet()
-            NotificationCenter.default.post(name: .payrollSettingsDidChange, object: nil)
         }
         .task {
             if store.isPersonal {
@@ -532,15 +531,15 @@ private extension WorkerCheckInView {
     }
 
     func persistLocalPayrollSettings() {
-        PayrollLocalSettingsStore.save(
-            workerId: store.workerId,
-            settings: PayrollLocalSettings(
-                applyWeeklyAllowance: applyWeeklyAllowance,
-                deductionType: deductionType,
-                applyNightAllowance: applyNightAllowance,
-                payday: payday
-            )
+        let settings = PayrollLocalSettings(
+            applyWeeklyAllowance: applyWeeklyAllowance,
+            deductionType: deductionType,
+            applyNightAllowance: applyNightAllowance,
+            payday: payday
         )
+        // .task에서 저장값을 불러올 때도 onChange가 불리므로, 실제로 바뀐 경우에만 다른 화면을 갱신한다.
+        guard PayrollLocalSettingsStore.load(workerId: store.workerId) != settings else { return }
+        PayrollLocalSettingsStore.save(workerId: store.workerId, settings: settings)
         NotificationCenter.default.post(name: .payrollSettingsDidChange, object: nil)
     }
 
@@ -1271,7 +1270,7 @@ private struct WorkerStoreHistoryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                if isLoading {
+                if isLoading && logs.isEmpty {
                     ProgressView()
                         .frame(maxWidth: .infinity, alignment: .center)
                         .appCard()

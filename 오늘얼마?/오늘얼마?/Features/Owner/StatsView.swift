@@ -108,7 +108,9 @@ struct StatsView: View {
         .task {
             await refresh(force: false)
         }
-        .onChange(of: selectedStoreId) { _ in
+        .onChange(of: selectedStoreId) { oldValue, _ in
+            // 첫 선택(nil → 첫 매장)은 refresh()가 이어서 로드하므로 중복 요청을 건너뛴다.
+            guard oldValue != nil else { return }
             Task { await loadMonth(force: false) }
         }
         .onChange(of: currentMonth) { _ in

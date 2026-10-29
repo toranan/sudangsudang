@@ -42,7 +42,7 @@ struct OwnerMonthlyDetailView: View {
             VStack(alignment: .leading, spacing: 14) {
                 SectionHeader(title: "이번 달 알바별")
 
-                if isLoading {
+                if isLoading && workers.isEmpty {
                     ProgressView()
                         .frame(maxWidth: .infinity, alignment: .center)
                         .appCard()

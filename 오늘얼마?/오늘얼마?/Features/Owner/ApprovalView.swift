@@ -153,7 +153,9 @@ struct ApprovalView: View {
         .task {
             await refresh(force: false)
         }
-        .onChange(of: selectedStoreId) { _ in
+        .onChange(of: selectedStoreId) { oldValue, _ in
+            // 첫 선택(nil → 첫 매장)은 refresh()가 이어서 로드하므로 중복 요청을 건너뛴다.
+            guard oldValue != nil else { return }
             Task { await loadLogs(force: false) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
@@ -253,21 +255,32 @@ struct ApprovalView: View {
             }
         }
         do {
-            let rows: [LogRow] = try await SupabaseManager.shared
+            // 화면에 필요한 것만 받는다: 대기 전체 + 최근 처리 10건 (매장 전체 이력을 받지 않음).
+            let columns = "id,store_id,worker_id,check_in_at,check_out_at,status,workers(name)"
+            async let pendingRows: [LogRow] = SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,store_id,worker_id,check_in_at,check_out_at,status,workers(name)")
+                .select(columns)
                 .eq("store_id", value: storeId.uuidString)
+                .or("status.is.null,status.eq.pending")
                 .order("check_in_at", ascending: false)
                 .execute()
                 .value
+            async let recentRows: [LogRow] = SupabaseManager.shared
+                .client
+                .from("work_logs")
+                .select(columns)
+                .eq("store_id", value: storeId.uuidString)
+                .in("status", values: ["approved", "rejected"])
+                .order("check_in_at", ascending: false)
+                .limit(10)
+                .execute()
+                .value
+            let (pendingResult, recentResult) = try await (pendingRows, recentRows)
 
             guard logsRequest.isCurrent(requestID), selectedStoreId == storeId else { return }
-            pending = rows.filter { normalizedStatus($0.status) == "pending" }
-            recent = rows.filter {
-                let status = normalizedStatus($0.status)
-                return status == "approved" || status == "rejected"
-            }.prefix(10).map { $0 }
+            pending = pendingResult
+            recent = recentResult
             self.lastLogsLoadedAt = now
             self.lastLogsStoreId = storeId
         } catch {
@@ -313,13 +326,33 @@ struct ApprovalView: View {
                 .eq("id", value: item.id.uuidString)
                 .execute()
             Haptics.success()
+            applyStatusLocally(item, status: status)
             NotificationCenter.default.post(name: .payrollSettingsDidChange, object: nil)
-            await loadLogs(force: true)
         } catch {
             Haptics.error()
             loadError = AppErrorMessage.userMessage(error)
         }
         #endif
+    }
+
+    // 승인/반려 직후 전체를 다시 받지 않고 대기 목록에서 최근 처리로 옮긴다.
+    @MainActor
+    private func applyStatusLocally(_ item: LogRow, status: String) {
+        let updated = LogRow(
+            id: item.id,
+            store_id: item.store_id,
+            worker_id: item.worker_id,
+            check_in_at: item.check_in_at,
+            check_out_at: item.check_out_at,
+            status: status,
+            workers: item.workers
+        )
+        withAnimation(.easeOut(duration: 0.2)) {
+            pending.removeAll { $0.id == item.id }
+            recent = Array(([updated] + recent.filter { $0.id != item.id })
+                .sorted { $0.check_in_at > $1.check_in_at }
+                .prefix(10))
+        }
     }
 
     private func hasCheckout(_ item: LogRow) -> Bool {
