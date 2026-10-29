@@ -133,7 +133,7 @@ struct OwnerSettingsView: View {
 
                     settingRow("무급 휴게") {
                         choiceChips(
-                            PayrollBreakPolicy.allCases.map { ($0.rawValue, $0.title) },
+                            PayrollBreakPolicy.allCases.map { ($0.rawValue, $0 == .none ? "없음" : $0 == .statutory ? "법정" : "직접") },
                             selected: draft.default_break_policy
                         ) { self.draft?.default_break_policy = $0 }
                     }
@@ -183,7 +183,7 @@ struct OwnerSettingsView: View {
                 }
                 .appCard()
 
-                Text("직원마다 다르게 하려면 알바관리에서 직원을 눌러 바꿀 수 있어요.")
+                Text("직원마다 다르게 하려면 알바관리 → 직원 → 설정에서 바꿀 수 있어요.")
                     .font(.app(.caption))
                     .foregroundColor(.appTextSecondary)
                     .padding(.horizontal, 4)
@@ -236,24 +236,7 @@ struct OwnerSettingsView: View {
         selected: String,
         onSelect: @escaping (String) -> Void
     ) -> some View {
-        HStack(spacing: 6) {
-            ForEach(options, id: \.value) { option in
-                let isSelected = option.value == selected
-                Button {
-                    Haptics.tap()
-                    withAnimation(.easeOut(duration: 0.15)) { onSelect(option.value) }
-                } label: {
-                    Text(option.title)
-                        .font(.app(.callout, .semibold))
-                        .foregroundColor(isSelected ? .white : .appTextSecondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(isSelected ? Color.appAccent : Color.appFill)
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-        }
+        ChoiceChips(options: options, selected: selected, onSelect: onSelect)
     }
 
     private func breakHelpText(for policy: String) -> String {

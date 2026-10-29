@@ -386,6 +386,39 @@ struct ActionTile: View {
     }
 }
 
+// 알약 모양 선택지 묶음. 선택된 항목만 진한 색으로 채운다.
+struct ChoiceChips: View {
+    let options: [(value: String, title: String)]
+    let selected: String
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(options, id: \.value) { option in
+                let isSelected = option.value == selected
+                Button {
+                    guard !isSelected else { return }
+                    Haptics.tap()
+                    withAnimation(.easeOut(duration: 0.15)) { onSelect(option.value) }
+                } label: {
+                    Text(option.title)
+                        .font(.system(size: 13, weight: isSelected ? .bold : .semibold))
+                        .foregroundColor(isSelected ? .appOnInk : .appTextSecondary)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(isSelected ? Color.appInk : Color.clear, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(Color.appFill, in: Capsule())
+    }
+}
+
 struct SectionHeader: View {
     let title: String
     var trailing: String? = nil

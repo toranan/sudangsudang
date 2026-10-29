@@ -48,7 +48,7 @@ struct WorkerManagementView: View {
     enum DetailTab: String, CaseIterable, Identifiable {
         case logs = "내역"
         case net = "세후금액"
-        case wage = "시급"
+        case wage = "설정"
         case evaluation = "평가"
 
         var id: String { rawValue }
@@ -1003,14 +1003,9 @@ struct WorkerDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var detailTab: WorkerManagementView.DetailTab = .logs
     @State private var wageInput: String = ""
-    @State private var isSavingWage = false
-    @State private var wageError: String?
     @State private var applyWeeklyAllowance: Bool = false
     @State private var applyNightAllowance: Bool = false
     @State private var deductionType: PayrollDeductionType = .withholding
-    @State private var payday: Int = PayrollLocalSettings.defaultPayday
-    @State private var isSavingPayroll = false
-    @State private var payrollError: String?
     @State private var startHourInput: String = ""
     @State private var startMinuteInput: String = ""
     @State private var endHourInput: String = ""
@@ -1036,21 +1031,42 @@ struct WorkerDetailSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(worker.name)
-                .font(.app(.headline, .bold))
-                .foregroundColor(.appTextPrimary)
-
-            Picker("", selection: $detailTab) {
-                ForEach(WorkerManagementView.DetailTab.visibleCases) { tab in
-                    Text(tab.rawValue).tag(tab)
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.appAccentSoft)
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Text(String(worker.name.prefix(1)))
+                            .font(.system(size: 19, weight: .heavy))
+                            .foregroundColor(.appAccent)
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(worker.name)
+                        .font(.system(size: 22, weight: .heavy))
+                        .foregroundColor(.appTextPrimary)
+                    if let phone = worker.phone, !phone.isEmpty {
+                        Text(phone)
+                            .font(.app(.caption))
+                            .foregroundColor(.appTextSecondary)
+                    }
                 }
             }
-            .pickerStyle(.segmented)
+            .padding(.top, 8)
+
+            ChoiceChips(
+                options: WorkerManagementView.DetailTab.visibleCases.map { ($0.rawValue, $0.rawValue) },
+                selected: detailTab.rawValue
+            ) { raw in
+                if let tab = WorkerManagementView.DetailTab(rawValue: raw) { detailTab = tab }
+            }
 
             if detailTab == .evaluation {
                 evaluationView
             } else if detailTab == .wage {
-                wageView
+                ScrollView {
+                    WorkerPayrollSettingsView(workerId: worker.id, storeId: worker.store_id, onSaved: onUpdate)
+                }
+                .scrollDismissesKeyboard(.interactively)
             } else if detailTab == .net {
                 netView
             } else {
@@ -1060,6 +1076,7 @@ struct WorkerDetailSheet: View {
             Spacer()
         }
         .padding(20)
+        .background(Color.appBackground.ignoresSafeArea())
         .contentShape(Rectangle())
         .onTapGesture { hideKeyboard() }
         .onAppear {
@@ -1079,7 +1096,6 @@ struct WorkerDetailSheet: View {
                     deductionType = .withholding
                 }
                 applyNightAllowance = worker.apply_night_allowance ?? false
-                payday = min(max(worker.payday ?? PayrollLocalSettings.defaultPayday, 1), 31)
                 didLoadPayrollState = true
             }
             evaluationSummary = initialEvaluation ?? buildFallbackEvaluation(ownerRating: nil)
@@ -1247,120 +1263,6 @@ struct WorkerDetailSheet: View {
             .opacity((isProcessingRetirement || isSavingRating) ? 0.6 : 1.0)
         }
         .appCard()
-    }
-
-    private var wageView: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("시급 (원)")
-                    .font(.app(.caption, .semibold))
-                    .foregroundColor(.appTextSecondary)
-                TextField("예: 10320", text: $wageInput)
-                    .keyboardType(.numberPad)
-                    .foregroundColor(.appTextPrimary)
-                    .appInputField()
-                MinimumWageHint(input: wageInput)
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("세후 설정")
-                    .font(.app(.callout, .semibold))
-                    .foregroundColor(.appTextPrimary)
-
-                Toggle(isOn: $applyWeeklyAllowance) {
-                    Text("주휴수당 적용")
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appTextPrimary)
-                }
-                .toggleStyle(SwitchToggleStyle(tint: .appAccent))
-                .onChange(of: applyWeeklyAllowance) { _ in
-                    Task { await savePayrollSettings() }
-                }
-
-                Toggle(isOn: $applyNightAllowance) {
-                    Text("야간수당 적용 (22:00~06:00 +50%)")
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appTextPrimary)
-                }
-                .toggleStyle(SwitchToggleStyle(tint: .appAccent))
-                .onChange(of: applyNightAllowance) { _ in
-                    Task { await savePayrollSettings() }
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("공제 방식 (택 1)")
-                        .font(.app(.caption, .semibold))
-                        .foregroundColor(.appTextSecondary)
-                    HStack(spacing: 8) {
-                        ForEach(PayrollDeductionType.allCases) { option in
-                            Button(action: {
-                                deductionType = option
-                                Task { await savePayrollSettings() }
-                            }) {
-                                Text(option.title)
-                                    .font(.app(.caption, .semibold))
-                                    .foregroundColor(deductionType == option ? .white : .appTextPrimary)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                    .background(deductionType == option ? Color.appAccent : Color.appSurface)
-                                    .cornerRadius(10)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(deductionType == option ? Color.appAccent : Color.appLine, lineWidth: 1)
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("월급일")
-                        .font(.app(.caption, .semibold))
-                        .foregroundColor(.appTextSecondary)
-                    Picker("월급일", selection: $payday) {
-                        ForEach(1...31, id: \.self) { day in
-                            Text("\(day)일").tag(day)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .onChange(of: payday) { _ in
-                        Task { await savePayrollSettings() }
-                    }
-                }
-
-                if let payrollError {
-                    Text(payrollError)
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appWarning)
-                }
-                if isSavingPayroll {
-                    Text("저장 중...")
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appTextSecondary)
-                } else {
-                    Text("세후금액 탭에서 예상 세후 금액을 확인할 수 있어요.")
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appTextSecondary)
-                }
-            }
-            .appCard()
-
-            if let wageError {
-                Text(wageError)
-                    .font(.app(.caption, .medium))
-                    .foregroundColor(.appWarning)
-            }
-
-            Button(action: {
-                Task { await saveWage() }
-            }) {
-                Text(isSavingWage ? "저장 중..." : "저장")
-            }
-            .buttonStyle(PrimaryButtonStyle())
-            .disabled(isSavingWage)
-            .opacity(isSavingWage ? 0.6 : 1.0)
-        }
     }
 
     private var netView: some View {
@@ -1568,89 +1470,6 @@ struct WorkerDetailSheet: View {
             .opacity(isSavingManual ? 0.6 : 1.0)
         }
         .appCard()
-    }
-
-    @MainActor
-    private func saveWage() async {
-        #if canImport(Supabase)
-        isSavingWage = true
-        wageError = nil
-        defer { isSavingWage = false }
-        let digits = wageInput.filter { $0.isNumber }
-        guard let wage = Double(digits), wage >= 0 else {
-            wageError = "시급을 올바르게 입력해주세요."
-            return
-        }
-        do {
-            struct UpdatePayload: Encodable { let hourly_wage: Double }
-            let payload = UpdatePayload(hourly_wage: wage)
-            _ = try await SupabaseManager.shared
-                .client
-                .from("workers")
-                .update(payload)
-                .eq("id", value: worker.id.uuidString)
-                .execute()
-            await onUpdate()
-        } catch {
-            wageError = AppErrorMessage.userMessage(error)
-        }
-        #endif
-    }
-
-    @MainActor
-    private func savePayrollSettings() async {
-        #if canImport(Supabase)
-        isSavingPayroll = true
-        payrollError = nil
-        defer { isSavingPayroll = false }
-        do {
-            struct UpdatePayload: Encodable {
-                let apply_weekly_allowance: Bool
-                let deduction_type: String
-                let apply_night_allowance: Bool
-                let payday: Int
-            }
-            let payload = UpdatePayload(
-                apply_weekly_allowance: applyWeeklyAllowance,
-                deduction_type: deductionType.rawValue,
-                apply_night_allowance: applyNightAllowance,
-                payday: payday
-            )
-            _ = try await SupabaseManager.shared
-                .client
-                .from("workers")
-                .update(payload)
-                .eq("id", value: worker.id.uuidString)
-                .execute()
-            await onUpdate()
-        } catch {
-            let message = error.localizedDescription.lowercased()
-            if message.contains("apply_night_allowance") || message.contains("payday") {
-                do {
-                    struct LegacyPayload: Encodable {
-                        let apply_weekly_allowance: Bool
-                        let deduction_type: String
-                    }
-                    let legacy = LegacyPayload(
-                        apply_weekly_allowance: applyWeeklyAllowance,
-                        deduction_type: deductionType.rawValue
-                    )
-                    _ = try await SupabaseManager.shared
-                        .client
-                        .from("workers")
-                        .update(legacy)
-                        .eq("id", value: worker.id.uuidString)
-                        .execute()
-                    payrollError = "야간수당/월급일 설정은 DB 마이그레이션 적용 후 저장돼요."
-                    await onUpdate()
-                } catch {
-                    payrollError = AppErrorMessage.userMessage(error)
-                }
-            } else {
-                payrollError = AppErrorMessage.userMessage(error)
-            }
-        }
-        #endif
     }
 
     @MainActor
