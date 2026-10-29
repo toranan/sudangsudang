@@ -1142,76 +1142,138 @@ struct CreateStoreView: View {
     }
 }
 
+// 앱을 설치하지 않는 직원을 사장님이 직접 등록하는 작은 시트. 출퇴근은 사장님이 대신 기록한다.
 struct CreateWorkerView: View {
     @Environment(\.dismiss) private var dismiss
     let storeId: UUID
     let onSubmit: (String, String, Double) -> Void
 
+    private enum Field { case name, phone, wage }
+
     @State private var name: String = ""
     @State private var phone: String = ""
     @State private var wage: String = String(Int(AppConfig.defaultHourlyWage))
+    @FocusState private var focusedField: Field?
 
     private var canSubmit: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !AppConfig.isBelowMinimumWage(wage)
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("이름")
-                        .font(.app(.caption, .semibold))
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("직접 직원 등록")
+                        .font(.system(size: 22, weight: .heavy))
+                        .tracking(-0.4)
+                        .foregroundColor(.appTextPrimary)
+                    Text("앱이 없는 직원도 사장님이 출퇴근을 기록할 수 있어요")
+                        .font(.app(.caption))
                         .foregroundColor(.appTextSecondary)
+                }
+                Spacer(minLength: 8)
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.appTextPrimary)
+                        .frame(width: 32, height: 32)
+                        .background(Color.appFill, in: Circle())
+                }
+                .buttonStyle(PressableRowStyle())
+                .accessibilityLabel("닫기")
+            }
+
+            VStack(spacing: 0) {
+                fieldRow("이름") {
                     TextField("홍길동", text: $name)
-                        .appInputField()
+                        .focused($focusedField, equals: .name)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .phone }
                 }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("전화번호 (선택)")
-                        .font(.app(.caption, .semibold))
-                        .foregroundColor(.appTextSecondary)
-                    TextField("010-1234-5678", text: $phone)
+                divider
+                fieldRow("전화번호") {
+                    TextField("선택", text: $phone)
                         .keyboardType(.phonePad)
-                        .appInputField()
+                        .focused($focusedField, equals: .phone)
+                        .onChange(of: phone) { _, newValue in
+                            let formatted = Self.formatPhone(newValue)
+                            if formatted != newValue { phone = formatted }
+                        }
                 }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("시급 (원)")
-                        .font(.app(.caption, .semibold))
-                        .foregroundColor(.appTextSecondary)
-                    TextField("예: 10320", text: $wage)
-                        .keyboardType(.numberPad)
-                        .appInputField()
-                    MinimumWageHint(input: wage)
-                }
-
-                Button(action: {
-                    let digits = wage.filter { $0.isNumber }
-                    let amount = Double(digits) ?? AppConfig.defaultHourlyWage
-                    onSubmit(name, phone, amount)
-                    dismiss()
-                }) {
-                    Text("등록하기")
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(!canSubmit)
-                .opacity(canSubmit ? 1.0 : 0.5)
-
-                Spacer()
-            }
-            .padding(20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .contentShape(Rectangle())
-            .onTapGesture { hideKeyboard() }
-            .navigationTitle("직접 직원 등록")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("닫기") { dismiss() }
+                divider
+                fieldRow("시급") {
+                    HStack(spacing: 4) {
+                        TextField("10320", text: $wage)
+                            .keyboardType(.numberPad)
+                            .focused($focusedField, equals: .wage)
+                        Text("원")
+                            .foregroundColor(.appTextSecondary)
+                    }
                 }
             }
+            .padding(.horizontal, 18)
+            .background(Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+
+            MinimumWageHint(input: wage)
+                .padding(.horizontal, 4)
+
+            Button {
+                let digits = wage.filter { $0.isNumber }
+                let amount = Double(digits) ?? AppConfig.defaultHourlyWage
+                Haptics.success()
+                onSubmit(name.trimmingCharacters(in: .whitespacesAndNewlines), phone, amount)
+                dismiss()
+            } label: {
+                Text("등록하기")
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(!canSubmit)
+            .opacity(canSubmit ? 1.0 : 0.5)
         }
-        .background(Color.appBackground.ignoresSafeArea())
+        .padding(.horizontal, 20)
+        .padding(.top, 28)
+        .padding(.bottom, 12)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .contentShape(Rectangle())
+        .onTapGesture { focusedField = nil }
+        .presentationBackground(Color.appBackground)
+        .presentationDetents([.height(420)])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(28)
+        .onAppear { focusedField = .name }
+    }
+
+    private var divider: some View {
+        Rectangle().fill(Color.appLine).frame(height: 1)
+    }
+
+    private func fieldRow<Field: View>(_ title: String, @ViewBuilder field: () -> Field) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.app(.callout, .semibold))
+                .foregroundColor(.appTextPrimary)
+                .frame(width: 64, alignment: .leading)
+            field()
+                .font(.app(.callout))
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.vertical, 15)
+    }
+
+    // 숫자만 남기고 010-1234-5678 모양으로 맞춘다.
+    private static func formatPhone(_ input: String) -> String {
+        let digits = String(input.filter(\.isNumber).prefix(11))
+        switch digits.count {
+        case 0...3:
+            return digits
+        case 4...7:
+            return "\(digits.prefix(3))-\(digits.dropFirst(3))"
+        default:
+            let middleLength = digits.count == 11 ? 4 : 3
+            let middle = digits.dropFirst(3).prefix(middleLength)
+            return "\(digits.prefix(3))-\(middle)-\(digits.dropFirst(3 + middleLength))"
+        }
     }
 }
 
