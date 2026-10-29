@@ -13,6 +13,7 @@ struct StoreKnowledgeManagementView: View {
     @State private var isLoading = false
     @State private var isSaving = false
     @State private var loadMessage: String?
+    @State private var saveError: String?
     @State private var storageMode: StoreKnowledgeStorageMode = .local
 
     @State private var isPresentingEditor = false
@@ -300,6 +301,15 @@ struct StoreKnowledgeManagementView: View {
             }
             .scrollDismissesKeyboard(.interactively)
 
+            if let saveError {
+                Text(saveError)
+                    .font(.app(.caption, .medium))
+                    .foregroundColor(.appWarning)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+            }
+
             Button(action: { Task { await saveDraft() } }) {
                 Text(isSaving ? "저장 중" : (editingDocument == nil ? "등록하기" : "저장하기"))
             }
@@ -519,6 +529,7 @@ struct StoreKnowledgeManagementView: View {
         draftTitle = document?.title ?? ""
         draftContent = document?.content ?? ""
         draftIsPinned = document?.isPinned ?? false
+        saveError = nil
         isPresentingEditor = true
     }
 
@@ -579,10 +590,13 @@ struct StoreKnowledgeManagementView: View {
                     )
                 replaceDocument(response.document)
                 loadMessage = nil
+                saveError = nil
                 isPresentingEditor = false
                 return
             } catch {
-                loadMessage = AppErrorMessage.userMessage(error)
+                // 서버 저장이 실패했는데 이 기기에만 남기면 알바생은 못 보니, 편집 화면을 그대로 두고 알린다.
+                saveError = "저장하지 못했어요. 잠시 후 다시 시도해주세요."
+                return
             }
             #endif
         }
@@ -634,6 +648,7 @@ struct StoreKnowledgeManagementView: View {
                 return
             } catch {
                 loadMessage = AppErrorMessage.userMessage(error)
+                return
             }
             #endif
         }
@@ -664,6 +679,7 @@ struct StoreKnowledgeManagementView: View {
                 return
             } catch {
                 loadMessage = AppErrorMessage.userMessage(error)
+                return
             }
             #endif
         }
