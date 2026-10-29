@@ -13,10 +13,6 @@ struct WorkerStoreKnowledgeView: View {
     @State private var viewingDocument: WorkerStoreDocumentRow?
     @State private var isLoading = false
     @State private var loadMessage: String?
-    @State private var chatInput = ""
-    @State private var isAsking = false
-    @State private var chatMessages: [WorkerStoreChatMessage] = []
-    @FocusState private var isChatInputFocused: Bool
 
     init(
         storeId: UUID,
@@ -32,22 +28,14 @@ struct WorkerStoreKnowledgeView: View {
         VStack(spacing: 18) {
             header
 
-            if !isChatOnly {
-                panelPicker
-            }
+            panelPicker
 
-            Group {
-                if isChatOnly {
-                    chatPanel
-                } else {
-                    ScrollView {
-                        documentPanel
-                            .padding(.bottom, 32)
-                    }
-                    .appRefreshable {
-                        await loadDocuments()
-                    }
-                }
+            ScrollView {
+                documentPanel
+                    .padding(.bottom, 32)
+            }
+            .appRefreshable {
+                await loadDocuments()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -59,10 +47,6 @@ struct WorkerStoreKnowledgeView: View {
         .sheet(item: $viewingDocument) { document in
             documentDetailSheet(document)
         }
-    }
-
-    private var isChatOnly: Bool {
-        selectedPanel == .chat
     }
 
     private var header: some View {
@@ -81,7 +65,7 @@ struct WorkerStoreKnowledgeView: View {
                     .font(.app(.callout, .medium))
                     .foregroundColor(.appTextSecondary)
                     .lineLimit(1)
-                Text(isChatOnly ? "물어보기" : "가게 소식")
+                Text("가게 소식")
                     .font(.system(size: 26, weight: .heavy))
                     .tracking(-0.6)
                     .foregroundColor(.appTextPrimary)
@@ -95,7 +79,7 @@ struct WorkerStoreKnowledgeView: View {
 
     private var panelPicker: some View {
         HStack(spacing: 2) {
-            ForEach(WorkerStoreKnowledgePanel.documentCases) { panel in
+            ForEach(WorkerStoreKnowledgePanel.allCases) { panel in
                 let isSelected = panel == selectedPanel
                 Button(action: { selectedPanel = panel }) {
                     Text(panel.title)
@@ -148,106 +132,6 @@ struct WorkerStoreKnowledgeView: View {
                 .padding(.horizontal, 20)
             }
         }
-    }
-
-    private var chatPanel: some View {
-        VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 10) {
-                        if chatMessages.isEmpty && !isAsking {
-                            chatIntroView
-                                .padding(.top, 38)
-                                .padding(.bottom, 16)
-                        }
-
-                        ForEach(chatMessages) { message in
-                            chatBubble(message)
-                                .id(message.id)
-                        }
-
-                        if isAsking {
-                            typingBubble
-                                .id("typing")
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 18)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    isChatInputFocused = false
-                }
-                .onChange(of: chatMessages.count) { _ in
-                    scrollToLatestMessage(proxy)
-                }
-                .onChange(of: isAsking) { _ in
-                    scrollToLatestMessage(proxy)
-                }
-            }
-
-            HStack(spacing: 10) {
-                TextField("메시지 입력", text: $chatInput, axis: .vertical)
-                    .font(.app(.callout, .medium))
-                    .focused($isChatInputFocused)
-                    .lineLimit(1...4)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(Color.appSurface)
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .onSubmit { Task { await askQuestion() } }
-
-                Button(action: { Task { await askQuestion() } }) {
-                    ZStack {
-                        if isAsking {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(.appOnInk)
-                        } else {
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .appTextSecondary : .appOnInk)
-                        }
-                    }
-                    .frame(width: 44, height: 44)
-                    .background(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isAsking ? Color.appFill : Color.appInk)
-                    .clipShape(Circle())
-                }
-                .disabled(isAsking || chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 12)
-            .background(Color.appBackground)
-        }
-        .frame(maxHeight: .infinity)
-    }
-
-    private var chatIntroView: some View {
-        VStack(spacing: 14) {
-            Image("wallet_mascot")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 108, height: 108)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-
-            VStack(spacing: 7) {
-                Text("가게 매뉴얼 챗봇")
-                    .font(.app(.headline, .bold))
-                    .foregroundColor(.appTextPrimary)
-
-                Text("공지와 매뉴얼에서 확인한 내용으로\n궁금한 점에 답변해요.")
-                    .font(.app(.caption, .medium))
-                    .foregroundColor(.appTextSecondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 24)
     }
 
     private func documentRow(_ document: WorkerStoreDocumentRow) -> some View {
@@ -341,52 +225,6 @@ struct WorkerStoreKnowledgeView: View {
         }
     }
 
-    private func chatBubble(_ message: WorkerStoreChatMessage) -> some View {
-        HStack {
-            if message.role == .user {
-                Spacer(minLength: 54)
-            }
-
-            Text(message.content)
-                .font(.app(.callout, .medium))
-                .foregroundColor(message.role == .user ? .appOnInk : .appTextPrimary)
-                .lineSpacing(3)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .background(message.role == .user ? Color.appInk : Color.appSurface)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .frame(maxWidth: 280, alignment: message.role == .user ? .trailing : .leading)
-
-            if message.role == .assistant {
-                Spacer(minLength: 54)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
-    }
-
-    private var typingBubble: some View {
-        HStack {
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(Color.appTextSecondary.opacity(0.55))
-                    .frame(width: 6, height: 6)
-                Circle()
-                    .fill(Color.appTextSecondary.opacity(0.4))
-                    .frame(width: 6, height: 6)
-                Circle()
-                    .fill(Color.appTextSecondary.opacity(0.25))
-                    .frame(width: 6, height: 6)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-            .background(Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-
-            Spacer(minLength: 54)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     private var filteredDocuments: [WorkerStoreDocumentRow] {
         sortedDocuments.filter { $0.kind.panel == selectedPanel }
     }
@@ -397,18 +235,6 @@ struct WorkerStoreKnowledgeView: View {
                 return lhs.isPinned && !rhs.isPinned
             }
             return (lhs.updatedAt ?? lhs.createdAt ?? .distantPast) > (rhs.updatedAt ?? rhs.createdAt ?? .distantPast)
-        }
-    }
-
-    private func scrollToLatestMessage(_ proxy: ScrollViewProxy) {
-        DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.2)) {
-                if isAsking {
-                    proxy.scrollTo("typing", anchor: .bottom)
-                } else if let lastMessage = chatMessages.last {
-                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                }
-            }
         }
     }
 
@@ -433,74 +259,11 @@ struct WorkerStoreKnowledgeView: View {
         }
         #endif
     }
-
-    @MainActor
-    private func askQuestion() async {
-        let question = chatInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !question.isEmpty, !isAsking else { return }
-
-        chatMessages.append(WorkerStoreChatMessage(role: .user, content: question))
-        chatInput = ""
-        isAsking = true
-        defer { isAsking = false }
-
-        #if canImport(Supabase)
-        do {
-            let payload = WorkerStoreRagAskRequest(
-                action: "ask",
-                storeId: storeId,
-                question: question
-            )
-            let response: WorkerStoreRagAskResponse = try await SupabaseManager.shared
-                .client
-                .functions
-                .invoke(
-                    "store-rag",
-                    options: FunctionInvokeOptions(body: payload)
-                )
-            chatMessages.append(WorkerStoreChatMessage(role: .assistant, content: response.displayAnswer))
-            return
-        } catch {
-            loadMessage = AppErrorMessage.userMessage(error)
-        }
-        #endif
-
-        chatMessages.append(WorkerStoreChatMessage(role: .assistant, content: answerFromLoadedDocuments(for: question)))
-    }
-
-    private func answerFromLoadedDocuments(for question: String) -> String {
-        guard !documents.isEmpty else {
-            return "아직 확인할 수 있는 공지나 매뉴얼이 없어요."
-        }
-
-        let normalizedQuestion = question.lowercased()
-        let tokens = normalizedQuestion
-            .components(separatedBy: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters).union(.symbols))
-            .filter { !$0.isEmpty }
-        let matches = sortedDocuments.compactMap { document -> WorkerStoreDocumentRow? in
-            let haystack = "\(document.title) \(document.content)".lowercased()
-            if haystack.contains(normalizedQuestion) {
-                return document
-            }
-            return tokens.contains(where: { $0.count >= 2 && haystack.contains($0) }) ? document : nil
-        }
-
-        guard !matches.isEmpty else {
-            return "등록된 문서에서 관련 내용을 찾지 못했어요."
-        }
-
-        return matches.prefix(3)
-            .map { "- \($0.title)\n  \($0.content.normalizedPreview(limit: 120))" }
-            .joined(separator: "\n\n")
-    }
 }
 
 enum WorkerStoreKnowledgePanel: String, CaseIterable, Identifiable {
     case notice
     case manual
-    case chat
-
-    static let documentCases: [WorkerStoreKnowledgePanel] = [.notice, .manual]
 
     var id: String { rawValue }
 
@@ -508,7 +271,6 @@ enum WorkerStoreKnowledgePanel: String, CaseIterable, Identifiable {
         switch self {
         case .notice: return "공지"
         case .manual: return "매뉴얼"
-        case .chat: return "챗봇"
         }
     }
 
@@ -516,7 +278,6 @@ enum WorkerStoreKnowledgePanel: String, CaseIterable, Identifiable {
         switch self {
         case .notice: return "등록된 공지가 없어요."
         case .manual: return "등록된 매뉴얼이 없어요."
-        case .chat: return ""
         }
     }
 }
@@ -589,48 +350,6 @@ private struct WorkerStoreDocumentRow: Codable, Identifiable, Hashable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
-}
-
-private struct WorkerStoreRagAskRequest: Encodable {
-    let action: String
-    let storeId: UUID
-    let question: String
-}
-
-private struct WorkerStoreRagAskResponse: Decodable {
-    struct Source: Decodable {
-        let id: UUID
-        let title: String
-        let documentType: String?
-        let similarity: Double?
-    }
-
-    let answer: String
-    let sources: [Source]
-
-    var displayAnswer: String {
-        guard !sources.isEmpty else { return answer }
-        let sourceTitles = sources
-            .map(\.title)
-            .reduce(into: [String]()) { result, title in
-                if !result.contains(title) {
-                    result.append(title)
-                }
-            }
-        guard !sourceTitles.isEmpty else { return answer }
-        return "\(answer)\n\n참고: \(sourceTitles.joined(separator: ", "))"
-    }
-}
-
-private struct WorkerStoreChatMessage: Identifiable {
-    enum Role {
-        case user
-        case assistant
-    }
-
-    let id = UUID()
-    let role: Role
-    let content: String
 }
 
 private extension String {

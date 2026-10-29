@@ -65,6 +65,7 @@ struct WorkerHomeView: View {
     @State private var storePays: [StorePay] = []
     @State private var selectedStoreId: UUID?
     @State private var isStoreDropdownExpanded = false
+    @State private var chatTarget: StoreChatTarget?
     @State private var isLoading = false
     @State private var isUserRefreshing = false
     @State private var loadError: String?
@@ -116,6 +117,9 @@ struct WorkerHomeView: View {
                 Button("확인", role: .cancel) {}
             } message: {
                 Text(deleteAccountErrorMessage ?? "잠시 후 다시 시도해주세요.")
+            }
+            .fullScreenCover(item: $chatTarget) { target in
+                WorkerStoreChatView(storeId: target.id, storeName: target.name)
             }
             .sheet(isPresented: $isPresentingJoinStore) {
                 JoinStoreView { token in
@@ -535,21 +539,17 @@ struct WorkerHomeView: View {
             NavigationLink {
                 WorkerStoreKnowledgeView(storeId: store.id, storeName: store.name)
             } label: {
-                workerQuickMenuRow(icon: "megaphone.fill", title: "공지", subtitle: "가게 소식 보기")
+                workerQuickMenuRow(icon: "megaphone.fill", title: "가게 소식", subtitle: "공지 · 매뉴얼")
             }
             .buttonStyle(PressableRowStyle())
 
-            NavigationLink {
-                WorkerStoreKnowledgeView(
-                    storeId: store.id,
-                    storeName: store.name,
-                    initialPanel: .manual
-                )
+            Button {
+                chatTarget = StoreChatTarget(id: store.id, name: store.name)
             } label: {
                 workerQuickMenuRow(
-                    icon: "book.closed.fill",
-                    title: "매뉴얼",
-                    subtitle: "업무 방법 보기",
+                    icon: "sparkles",
+                    title: "물어보기",
+                    subtitle: "매장 챗봇",
                     tint: .appLavender,
                     fill: .appLavenderSoft
                 )
@@ -650,28 +650,6 @@ struct WorkerHomeView: View {
                 }
 
                 Spacer(minLength: 8)
-
-                if let selectedStorePay {
-                    NavigationLink {
-                        WorkerStoreKnowledgeView(
-                            storeId: selectedStorePay.id,
-                            storeName: selectedStorePay.name,
-                            initialPanel: .chat
-                        )
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 14, weight: .semibold))
-                            Text("물어보기")
-                                .font(.app(.callout, .bold))
-                        }
-                        .foregroundColor(.appAccent)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .background(Color.appAccentSoft, in: Capsule())
-                    }
-                    .buttonStyle(PressableRowStyle())
-                }
 
                 Menu {
                     Button("로그아웃", role: .destructive) {

@@ -113,25 +113,6 @@ struct WorkerCheckInView: View {
                     .minimumScaleFactor(0.7)
             }
             Spacer(minLength: 8)
-            NavigationLink {
-                WorkerStoreKnowledgeView(
-                    storeId: store.id,
-                    storeName: store.name,
-                    initialPanel: .chat
-                )
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("물어보기")
-                        .font(.app(.callout, .bold))
-                }
-                .foregroundColor(.appAccent)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(Color.appAccentSoft, in: Capsule())
-            }
-            .buttonStyle(PressableRowStyle())
         }
         .padding(.horizontal, 4)
     }

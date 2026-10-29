@@ -66,15 +66,24 @@ struct AppTabBar<Tag: Hashable>: View {
     }
 }
 
+// 탭바(42 + 위아래 8씩)와 아래 여백을 합친 높이. 스크롤 끝이 탭바에 가리지 않게 이만큼 비워 둔다.
+private let appTabBarReservedHeight: CGFloat = 70
+
 extension View {
     // TabView에 붙여 AppTabBar를 아래에 띄운다. 각 탭에는 .hidesSystemTabBar()를 붙인다.
     func appTabBar<Tag: Hashable>(selection: Binding<Tag>, items: [AppTabItem<Tag>]) -> some View {
-        self.safeAreaInset(edge: .bottom, spacing: 0) {
+        self.overlay(alignment: .bottom) {
             AppTabBar(selection: selection, items: items)
+                .ignoresSafeArea(.keyboard)
         }
     }
 
+    // 기본 탭바를 숨기고, 떠 있는 탭바 높이만큼 아래를 비운다. 내용은 탭바 뒤로 지나가며 끝까지 스크롤된다.
     func hidesSystemTabBar() -> some View {
-        self.toolbar(.hidden, for: .tabBar)
+        self
+            .toolbar(.hidden, for: .tabBar)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear.frame(height: appTabBarReservedHeight)
+            }
     }
 }
