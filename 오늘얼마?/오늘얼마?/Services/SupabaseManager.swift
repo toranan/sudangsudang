@@ -561,7 +561,7 @@ final class SupabaseManager {
         return AppTime.calendar.date(from: components) ?? Date.distantFuture
     }()
 
-    // 헷갈리는 글자(0/O, 1/I/L)는 뺀다. 6자리 × 31글자 ≈ 8억 가지.
+    // 헷갈리는 글자(0/O, 1/I/L)는 뺀다. 6자리 × 31글자 ≈ 8.9억 가지.
     private static let storeCodeAlphabet = Array("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
 
     private func generateInviteCode(length: Int, alphabet: [Character]) -> String {
