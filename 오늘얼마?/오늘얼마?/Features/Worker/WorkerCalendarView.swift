@@ -48,6 +48,8 @@ struct WorkerCalendarView: View {
     @State private var selectedWorkerId: UUID?
     @State private var currentMonth: Date = Date()
     @State private var summaries: [DaySummary] = []
+    // 근무지·월별로 받아 둔 요약. 달을 넘길 때 먼저 보여주고 뒤에서 새로 받는다.
+    @State private var monthSummaryCache: [String: [DaySummary]] = [:]
     @State private var selectedDate: Date?
     @State private var isLoadingWorkers = false
     @State private var isLoading = false
@@ -121,6 +123,10 @@ struct WorkerCalendarView: View {
             Task { await loadMonth(force: false) }
         }
         .onChange(of: currentMonth) { _ in
+            if let workerId = selectedWorkerId,
+               let cached = monthSummaryCache["\(workerId.uuidString)|\(monthKey(currentMonth))"] {
+                summaries = cached
+            }
             Task { await loadMonth(force: false) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didAcceptInvite)) { _ in
@@ -475,7 +481,11 @@ struct WorkerCalendarView: View {
             guard monthRequest.isCurrent(requestID),
                   selectedWorkerId == workerId,
                   "\(workerId.uuidString)|\(monthKey(currentMonth))" == key else { return }
-            summaries = buildSummaries(from: rows)
+            let built = buildSummaries(from: rows)
+            monthSummaryCache[key] = built
+            withAnimation(.easeOut(duration: 0.2)) {
+                summaries = built
+            }
             if selectedDate == nil ||
                 selectedDate.map({ !calendar.isDate($0, equalTo: currentMonth, toGranularity: .month) }) == true {
                 selectedDate = summaries.first?.date ?? start
