@@ -6,7 +6,7 @@ struct OwnerRootView: View {
         case workers
         case schedule
         case approval
-        case stats
+        case settings
     }
 
     @State private var selection: Tab = .home
@@ -60,14 +60,14 @@ struct OwnerRootView: View {
             .tag(Tab.approval)
 
             NavigationStack {
-                StatsView()
+                OwnerSettingsView()
                     .toolbar(.hidden, for: .navigationBar)
             }
             .tabItem {
-                Image(systemName: "chart.bar.fill")
-                Text("정산")
+                Image(systemName: "gearshape.fill")
+                Text("설정")
             }
-            .tag(Tab.stats)
+            .tag(Tab.settings)
         }
         .tint(.appAccent)
         .task {

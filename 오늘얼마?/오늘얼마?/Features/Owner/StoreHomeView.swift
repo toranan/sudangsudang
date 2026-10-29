@@ -94,9 +94,6 @@ struct StoreHomeView: View {
     @State private var storeError: String?
     @State private var pendingDeleteStore: Store?
     @State private var isShowingDeleteConfirm = false
-    @State private var isShowingDeleteAccountConfirm = false
-    @State private var isShowingDeleteAccountError = false
-    @State private var deleteAccountErrorMessage: String?
 
     @State private var actualPay: Double = 0
     @State private var projectedPay: Double = 0
@@ -178,19 +175,6 @@ struct StoreHomeView: View {
                 pendingDeleteStore = nil
             }
         }
-        .alert("계정을 삭제하시겠습니까?", isPresented: $isShowingDeleteAccountConfirm) {
-            Button("삭제", role: .destructive) {
-                Task { await deleteAccount() }
-            }
-            Button("취소", role: .cancel) {}
-        } message: {
-            Text("모든 데이터가 삭제되며 복구할 수 없습니다.")
-        }
-        .alert("계정 삭제 실패", isPresented: $isShowingDeleteAccountError) {
-            Button("확인", role: .cancel) {}
-        } message: {
-            Text(deleteAccountErrorMessage ?? "잠시 후 다시 시도해주세요.")
-        }
         .task {
             await refresh(force: false)
         }
@@ -253,24 +237,8 @@ struct StoreHomeView: View {
             }
 
             Spacer()
-
-            Menu {
-                Button("로그아웃", role: .destructive) {
-                    Task {
-                        await SupabaseManager.shared.signOut()
-                        NotificationCenter.default.post(name: .didLogout, object: nil)
-                    }
-                }
-                Button("계정 삭제", role: .destructive) {
-                    isShowingDeleteAccountConfirm = true
-                }
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.appTextSecondary)
-                    .frame(width: 40, height: 40)
-            }
         }
+        .frame(minHeight: 40)
     }
 
     private var emptyStoreCard: some View {
@@ -482,18 +450,6 @@ struct StoreHomeView: View {
         }
         selectedStoreId = store.id
         Task { await loadSummary(force: true) }
-    }
-
-    @MainActor
-    private func deleteAccount() async {
-        do {
-            try await SupabaseManager.shared.deleteAccount()
-            await SupabaseManager.shared.signOut()
-            NotificationCenter.default.post(name: .didLogout, object: nil)
-        } catch {
-            deleteAccountErrorMessage = AppErrorMessage.userMessage(error)
-            isShowingDeleteAccountError = true
-        }
     }
 
     @MainActor
