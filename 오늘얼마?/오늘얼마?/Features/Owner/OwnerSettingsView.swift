@@ -301,7 +301,7 @@ struct PayrollDefaultsView: View {
                     Task { await save() }
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(isSaving || !hasChanges)
+                .disabled(isSaving || !hasChanges || AppConfig.isBelowMinimumWage(wageInput))
 
                 if let saveMessage {
                     Text(saveMessage)

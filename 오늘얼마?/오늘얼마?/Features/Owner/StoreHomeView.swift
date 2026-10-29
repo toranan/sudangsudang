@@ -1150,6 +1150,10 @@ struct CreateWorkerView: View {
     @State private var phone: String = ""
     @State private var wage: String = String(Int(AppConfig.defaultHourlyWage))
 
+    private var canSubmit: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !AppConfig.isBelowMinimumWage(wage)
+    }
+
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
@@ -1189,8 +1193,8 @@ struct CreateWorkerView: View {
                     Text("등록하기")
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .opacity(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
+                .disabled(!canSubmit)
+                .opacity(canSubmit ? 1.0 : 0.5)
 
                 Spacer()
             }

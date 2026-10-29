@@ -443,17 +443,13 @@ struct SectionHeader: View {
     }
 }
 
-// 입력한 시급이 최저시급보다 낮을 때만 보이는 안내. 저장은 막지 않는다.
+// 입력한 시급이 최저시급보다 낮을 때만 보이는 안내. 저장 버튼은 각 화면에서 막는다.
 struct MinimumWageHint: View {
     let input: String
 
-    private var wage: Double? {
-        Double(input.filter { $0.isNumber })
-    }
-
     var body: some View {
-        if let wage, wage > 0, wage < AppConfig.minimumHourlyWage {
-            Text("2026년 최저시급(\(Int(AppConfig.minimumHourlyWage).formatted())원)보다 낮아요")
+        if AppConfig.isBelowMinimumWage(input) {
+            Text("2026년 최저시급(\(Int(AppConfig.minimumHourlyWage).formatted())원) 아래로는 저장할 수 없어요")
                 .font(.app(.caption, .medium))
                 .foregroundColor(.appWarning)
         }

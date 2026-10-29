@@ -4,8 +4,14 @@ import Supabase
 #endif
 
 struct AppConfig {
-    // 2026년 최저시급. 시급 입력 시 미달 안내 기준.
+    // 2026년 최저시급. 이보다 낮은 시급은 저장하지 못하게 막는다.
     static let minimumHourlyWage: Double = 10_320
+
+    // 입력칸 문자열에서 숫자만 읽어, 값이 있는데 최저시급보다 낮으면 true.
+    static func isBelowMinimumWage(_ input: String) -> Bool {
+        guard let wage = Double(input.filter(\.isNumber)), wage > 0 else { return false }
+        return wage < minimumHourlyWage
+    }
     // 알바 평가(성장 단계·성실마크·사장 별점). 초기 사용자 확보 단계에서는 숨긴다.
     // false면 화면에서 숨기고 관련 조회도 하지 않는다. 데이터와 테이블은 그대로 둔다.
     static let isWorkerEvaluationEnabled = false

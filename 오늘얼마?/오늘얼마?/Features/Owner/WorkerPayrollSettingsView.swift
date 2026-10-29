@@ -362,6 +362,10 @@ struct WorkerPayrollSettingsView: View {
             errorMessage = "시급을 입력해주세요."
             return
         }
+        if wageChoice != Self.storeChoice, AppConfig.isBelowMinimumWage(wageInput) {
+            errorMessage = "최저시급(\(Int(AppConfig.minimumHourlyWage).formatted())원) 아래로는 저장할 수 없어요."
+            return
+        }
         isSaving = true
         errorMessage = nil
         savedMessage = nil
