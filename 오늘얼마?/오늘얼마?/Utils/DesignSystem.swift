@@ -59,15 +59,15 @@ extension Font {
     }
 }
 
-// 모서리 단계: 작은 칩 10, 입력칸·작은 카드 12, 버튼 16, 카드 20.
+// 모서리 단계: 작은 칩 10, 입력칸 14, 버튼 18, 카드 24.
 enum AppRadius {
     static let chip: CGFloat = 10
-    static let field: CGFloat = 12
-    static let button: CGFloat = 16
-    static let card: CGFloat = 20
+    static let field: CGFloat = 14
+    static let button: CGFloat = 18
+    static let card: CGFloat = 24
 }
 
-// Toss-like Color System (clean + friendly)
+// 미니멀 그린: 따뜻한 회백색 바탕, 흰 카드, 초록 포인트, 검정 주요 버튼.
 extension Color {
     #if canImport(UIKit)
     private static func dynamic(light: UIColor, dark: UIColor) -> Color {
@@ -79,16 +79,39 @@ extension Color {
     }
 
     static let appAccent = dynamic(
-        light: UIColor(red: 30/255, green: 104/255, blue: 255/255, alpha: 1),
-        dark: UIColor(red: 78/255, green: 139/255, blue: 255/255, alpha: 1)
+        light: UIColor(red: 10/255, green: 155/255, blue: 99/255, alpha: 1),
+        dark: UIColor(red: 43/255, green: 196/255, blue: 136/255, alpha: 1)
+    )
+    // 초록 포인트의 옅은 바탕 (타일, 아바타, 칩).
+    static let appAccentSoft = dynamic(
+        light: UIColor(red: 231/255, green: 246/255, blue: 239/255, alpha: 1),
+        dark: UIColor(red: 18/255, green: 52/255, blue: 39/255, alpha: 1)
+    )
+    // 두 번째 포인트 (보라). 타일을 구분할 때만 쓴다.
+    static let appLavender = dynamic(
+        light: UIColor(red: 110/255, green: 86/255, blue: 207/255, alpha: 1),
+        dark: UIColor(red: 167/255, green: 148/255, blue: 240/255, alpha: 1)
+    )
+    static let appLavenderSoft = dynamic(
+        light: UIColor(red: 241/255, green: 238/255, blue: 255/255, alpha: 1),
+        dark: UIColor(red: 40/255, green: 34/255, blue: 66/255, alpha: 1)
+    )
+    // 주요 버튼, 탭바, 알림 배너의 진한 면과 그 위 글자색.
+    static let appInk = dynamic(
+        light: UIColor(red: 22/255, green: 24/255, blue: 29/255, alpha: 1),
+        dark: UIColor(red: 242/255, green: 244/255, blue: 247/255, alpha: 1)
+    )
+    static let appOnInk = dynamic(
+        light: UIColor(red: 1, green: 1, blue: 1, alpha: 1),
+        dark: UIColor(red: 22/255, green: 24/255, blue: 29/255, alpha: 1)
     )
     static let appBackground = dynamic(
-        light: UIColor(red: 242/255, green: 244/255, blue: 246/255, alpha: 1),
+        light: UIColor(red: 247/255, green: 247/255, blue: 245/255, alpha: 1),
         dark: UIColor(red: 16/255, green: 17/255, blue: 20/255, alpha: 1)
     )
-    // 입력칸, 칩 같은 채움 면. 흰 카드와 회색 배경 어디에 놓여도 보이도록 배경보다 한 단계 진하다.
+    // 입력칸, 칩 같은 채움 면. 흰 카드와 바탕 어디에 놓여도 보이도록 바탕보다 한 단계 진하다.
     static let appFill = dynamic(
-        light: UIColor(red: 230/255, green: 233/255, blue: 237/255, alpha: 1),
+        light: UIColor(red: 239/255, green: 240/255, blue: 242/255, alpha: 1),
         dark: UIColor(red: 52/255, green: 56/255, blue: 63/255, alpha: 1)
     )
     static let appSurface = dynamic(
@@ -96,29 +119,40 @@ extension Color {
         dark: UIColor(red: 28/255, green: 31/255, blue: 36/255, alpha: 1)
     )
     static let appTextPrimary = dynamic(
-        light: UIColor(red: 25/255, green: 31/255, blue: 40/255, alpha: 1),
+        light: UIColor(red: 22/255, green: 24/255, blue: 29/255, alpha: 1),
         dark: UIColor(red: 242/255, green: 244/255, blue: 247/255, alpha: 1)
     )
     static let appTextSecondary = dynamic(
-        light: UIColor(red: 107/255, green: 118/255, blue: 132/255, alpha: 1),
+        light: UIColor(red: 107/255, green: 112/255, blue: 121/255, alpha: 1),
         dark: UIColor(red: 155/255, green: 163/255, blue: 176/255, alpha: 1)
     )
     static let appLine = dynamic(
-        light: UIColor(red: 236/255, green: 239/255, blue: 243/255, alpha: 1),
+        light: UIColor(red: 240/255, green: 241/255, blue: 243/255, alpha: 1),
         dark: UIColor(red: 62/255, green: 67/255, blue: 76/255, alpha: 1)
     )
     static let appPositive = dynamic(
-        light: UIColor(red: 30/255, green: 200/255, blue: 140/255, alpha: 1),
+        light: UIColor(red: 18/255, green: 183/255, blue: 106/255, alpha: 1),
         dark: UIColor(red: 86/255, green: 214/255, blue: 171/255, alpha: 1)
     )
     static let appWarning = dynamic(
-        light: UIColor(red: 255/255, green: 107/255, blue: 107/255, alpha: 1),
+        light: UIColor(red: 240/255, green: 82/255, blue: 82/255, alpha: 1),
         dark: UIColor(red: 255/255, green: 132/255, blue: 132/255, alpha: 1)
     )
+    // 출근 전, 승인 대기처럼 주의를 끄는 상태.
+    static let appCaution = dynamic(
+        light: UIColor(red: 247/255, green: 144/255, blue: 9/255, alpha: 1),
+        dark: UIColor(red: 255/255, green: 170/255, blue: 70/255, alpha: 1)
+    )
     #else
-    static let appAccent = Color(red: 30/255, green: 104/255, blue: 255/255)
-    static let appBackground = Color(red: 242/255, green: 244/255, blue: 246/255)
-    static let appFill = Color(red: 230/255, green: 233/255, blue: 237/255)
+    static let appAccent = Color(red: 10/255, green: 155/255, blue: 99/255)
+    static let appAccentSoft = Color(red: 231/255, green: 246/255, blue: 239/255)
+    static let appLavender = Color(red: 110/255, green: 86/255, blue: 207/255)
+    static let appLavenderSoft = Color(red: 241/255, green: 238/255, blue: 255/255)
+    static let appInk = Color(red: 22/255, green: 24/255, blue: 29/255)
+    static let appOnInk = Color.white
+    static let appCaution = Color(red: 247/255, green: 144/255, blue: 9/255)
+    static let appBackground = Color(red: 247/255, green: 247/255, blue: 245/255)
+    static let appFill = Color(red: 239/255, green: 240/255, blue: 242/255)
     static let appSurface = Color.white
     static let appTextPrimary = Color(red: 27/255, green: 29/255, blue: 33/255)
     static let appTextSecondary = Color(red: 107/255, green: 114/255, blue: 128/255)
@@ -135,18 +169,24 @@ extension Color {
     static let tossGrey = appBackground
 }
 
+// 기본은 검정(appInk) 버튼. 색을 지정하면 그 위 글자는 흰색.
 struct PrimaryButtonStyle: ButtonStyle {
-    var backgroundColor: Color = .appAccent
-    var foregroundColor: Color = .white
+    var backgroundColor: Color?
+    var foregroundColor: Color?
+
+    init(backgroundColor: Color? = nil, foregroundColor: Color? = nil) {
+        self.backgroundColor = backgroundColor
+        self.foregroundColor = foregroundColor
+    }
 
     func makeBody(configuration: Configuration) -> some View {
         PressableLabel(configuration: configuration) {
             configuration.label
-                .font(.app(.body, .semibold))
-                .foregroundColor(foregroundColor)
-                .padding(.vertical, 16)
+                .font(.app(.body, .bold))
+                .foregroundColor(foregroundColor ?? (backgroundColor == nil ? .appOnInk : .white))
+                .padding(.vertical, 17)
                 .frame(maxWidth: .infinity)
-                .background(backgroundColor)
+                .background(backgroundColor ?? .appInk)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
         }
     }
@@ -179,8 +219,8 @@ struct PressableRowStyle: ButtonStyle {
 
 // Legacy alias for existing views
 struct TossButtonStyle: ButtonStyle {
-    var backgroundColor: Color = .appAccent
-    var foregroundColor: Color = .white
+    var backgroundColor: Color?
+    var foregroundColor: Color?
 
     func makeBody(configuration: Configuration) -> some View {
         PrimaryButtonStyle(backgroundColor: backgroundColor, foregroundColor: foregroundColor)
@@ -196,7 +236,7 @@ struct SecondaryButtonStyle: ButtonStyle {
             configuration.label
                 .font(.app(.body, .semibold))
                 .foregroundColor(foregroundColor)
-                .padding(.vertical, 16)
+                .padding(.vertical, 17)
                 .frame(maxWidth: .infinity)
                 .background(foregroundColor.opacity(0.12))
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))

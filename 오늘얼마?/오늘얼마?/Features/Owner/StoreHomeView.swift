@@ -56,9 +56,16 @@ struct StoreHomeView: View {
             var color: Color {
                 switch self {
                 case .upcoming: return .appTextSecondary
-                case .working: return .appPositive
-                case .done: return .appAccent
-                case .notCheckedIn: return .appWarning
+                case .working: return .appAccent
+                case .done: return .appTextSecondary
+                case .notCheckedIn: return .appCaution
+                }
+            }
+
+            var showsDot: Bool {
+                switch self {
+                case .working, .notCheckedIn: return true
+                case .upcoming, .done: return false
                 }
             }
         }
@@ -111,7 +118,7 @@ struct StoreHomeView: View {
     
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 18) {
                 header
 
                 if isLoadingStores && stores.isEmpty {
@@ -197,7 +204,7 @@ struct StoreHomeView: View {
     // MARK: - Sections
 
     private var header: some View {
-        HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 18) {
             Menu {
                 ForEach(stores) { store in
                     Button {
@@ -227,18 +234,28 @@ struct StoreHomeView: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(selectedStoreName)
-                        .font(.app(.title, .bold))
+                        .font(.app(.callout, .bold))
                         .foregroundColor(.appTextPrimary)
                         .lineLimit(1)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.appTextSecondary)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Color.appSurface, in: Capsule())
             }
 
-            Spacer()
+            VStack(alignment: .leading, spacing: 4) {
+                Text(todayText)
+                    .font(.app(.callout, .medium))
+                    .foregroundColor(.appTextSecondary)
+                Text("오늘도 수고 많으세요")
+                    .font(.system(size: 26, weight: .heavy))
+                    .tracking(-0.6)
+                    .foregroundColor(.appTextPrimary)
+            }
         }
-        .frame(minHeight: 40)
     }
 
     private var emptyStoreCard: some View {
@@ -260,75 +277,109 @@ struct StoreHomeView: View {
     private var pendingBanner: some View {
         Button(action: onNavigateToApproval) {
             HStack(spacing: 10) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 20, weight: .semibold))
+                Circle()
+                    .fill(Color.appCaution)
+                    .frame(width: 8, height: 8)
                 Text("승인 기다리는 근무 \(pendingCount)건")
-                    .font(.app(.body, .semibold))
+                    .font(.app(.callout, .semibold))
+                    .foregroundColor(.appOnInk)
                 Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .bold))
+                Text("확인하기")
+                    .font(.app(.caption, .medium))
+                    .foregroundColor(.appOnInk.opacity(0.7))
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.appOnInk.opacity(0.7))
             }
-            .foregroundColor(.appAccent)
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
-            .background(Color.appAccent.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+            .background(Color.appInk)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(PressableRowStyle())
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     private var laborCostCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("\(currentMonthText) 예상 인건비")
-                .font(.app(.callout, .semibold))
-                .foregroundColor(.appTextSecondary)
-
-            if isLoadingSummary && !didLoadSummary {
-                ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            } else {
-                Text(formatWon(actualPay + projectedPay))
-                    .font(.app(.display, .bold))
-                    .foregroundColor(.appTextPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .contentTransition(.numericText())
-                Text("지금까지 \(formatWon(actualPay)) · 남은 근무 예정 \(formatWon(projectedPay))")
-                    .font(.app(.caption, .medium))
-                    .foregroundColor(.appTextSecondary)
-                    .lineLimit(2)
+        NavigationLink {
+            if let storeId = selectedStoreId {
+                OwnerMonthlyDetailView(storeId: storeId)
             }
-
-            Divider()
-                .padding(.vertical, 6)
-
-            NavigationLink {
-                if let storeId = selectedStoreId {
-                    OwnerMonthlyDetailView(storeId: storeId)
-                }
-            } label: {
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("총 \(formatHours(workedMinutes)) · 직원 \(workerCount)명")
+                    Text("\(currentMonthText) 예상 인건비")
                         .font(.app(.callout, .medium))
-                        .foregroundColor(.appTextPrimary)
                     Spacer()
-                    Text("자세히")
-                        .font(.app(.callout, .medium))
-                        .foregroundColor(.appTextSecondary)
+                    Text("총 \(formatHours(workedMinutes)) · \(workerCount)명")
+                        .font(.app(.caption, .medium))
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.appTextSecondary)
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .foregroundColor(.white.opacity(0.8))
+
+                if isLoadingSummary && !didLoadSummary {
+                    ProgressView()
+                        .tint(.white)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                } else {
+                    Text(formatWon(actualPay + projectedPay))
+                        .font(.system(size: 34, weight: .heavy))
+                        .tracking(-1)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .contentTransition(.numericText())
+
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.25))
+                            Capsule()
+                                .fill(Color.white)
+                                .frame(width: proxy.size.width * paidRatio)
+                        }
+                    }
+                    .frame(height: 6)
+                    .padding(.top, 10)
+
+                    HStack {
+                        Text("지금까지 \(formatWon(actualPay))")
+                        Spacer()
+                        Text("남은 예정 \(formatWon(projectedPay))")
+                    }
+                    .font(.app(.caption, .medium))
+                    .foregroundColor(.white.opacity(0.85))
+                    .padding(.top, 4)
                 }
             }
-            .buttonStyle(PressableRowStyle())
+            .padding(.horizontal, 22)
+            .padding(.vertical, 20)
+            .background(Color.appAccent)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         }
-        .appCard()
+        .buttonStyle(PressableRowStyle())
+    }
+
+    private var paidRatio: CGFloat {
+        let total = actualPay + projectedPay
+        guard total > 0 else { return 0 }
+        return CGFloat(min(1, max(0, actualPay / total)))
     }
 
     private var todaySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "오늘 근무", trailing: todayShifts.isEmpty ? nil : "\(todayShifts.count)명")
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("오늘 근무")
+                    .font(.system(size: 19, weight: .heavy))
+                    .foregroundColor(.appTextPrimary)
+                if !todayShifts.isEmpty {
+                    Text("\(todayShifts.count)")
+                        .font(.system(size: 19, weight: .heavy))
+                        .foregroundColor(.appAccent)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 4)
 
             if todayShifts.isEmpty {
                 Text(didLoadSummary ? "오늘 예정된 근무가 없어요." : "불러오는 중이에요.")
@@ -340,11 +391,14 @@ struct StoreHomeView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(todayShifts.enumerated()), id: \.element.id) { index, shift in
                         if index > 0 {
-                            Divider().padding(.leading, 56)
+                            Rectangle()
+                                .fill(Color.appLine)
+                                .frame(height: 1)
                         }
-                        todayShiftRow(shift)
+                        todayShiftRow(shift, index: index)
                     }
                 }
+                .padding(.horizontal, 18)
                 .padding(.vertical, 6)
                 .background(Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
@@ -352,51 +406,102 @@ struct StoreHomeView: View {
         }
     }
 
-    private func todayShiftRow(_ shift: TodayShift) -> some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(Color.appAccent.opacity(0.1))
-                .frame(width: 36, height: 36)
+    private static let avatarPalette: [(fill: Color, text: Color)] = [
+        (.appAccentSoft, .appAccent),
+        (Color.appCaution.opacity(0.14), .appCaution),
+        (.appLavenderSoft, .appLavender)
+    ]
+
+    private func todayShiftRow(_ shift: TodayShift, index: Int) -> some View {
+        let palette = Self.avatarPalette[index % Self.avatarPalette.count]
+        return HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(palette.fill)
+                .frame(width: 40, height: 40)
                 .overlay(
                     Text(String(shift.name.prefix(1)))
                         .font(.app(.callout, .bold))
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(palette.text)
                 )
             VStack(alignment: .leading, spacing: 2) {
                 Text(shift.name)
-                    .font(.app(.body, .semibold))
+                    .font(.app(.body, .bold))
                     .foregroundColor(.appTextPrimary)
                 Text(shift.timeText)
-                    .font(.app(.caption, .medium))
+                    .font(.app(.caption))
                     .foregroundColor(.appTextSecondary)
             }
             Spacer()
-            StatusPill(text: shift.status.title, color: shift.status.color)
+            HStack(spacing: 6) {
+                if shift.status.showsDot {
+                    Circle()
+                        .fill(shift.status.color)
+                        .frame(width: 7, height: 7)
+                }
+                Text(shift.status.title)
+                    .font(.app(.caption, .semibold))
+                    .foregroundColor(shift.status.showsDot ? shift.status.color : .appTextSecondary)
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
     }
 
     private var addStaffSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "직원 추가")
-            HStack(spacing: 10) {
-                Button {
-                    isPresentingInviteSheet = true
-                } label: {
-                    Label("초대 코드 보내기", systemImage: "paperplane.fill")
-                }
-                .buttonStyle(PrimaryButtonStyle())
-
-                Button {
-                    guard selectedStoreId != nil else { return }
-                    isPresentingCreateWorker = true
-                } label: {
-                    Label("직접 등록", systemImage: "square.and.pencil")
-                }
-                .buttonStyle(SecondaryButtonStyle())
+        HStack(spacing: 10) {
+            actionTile(
+                title: "초대 코드 보내기",
+                subtitle: "카톡으로 바로 공유",
+                systemImage: "paperplane",
+                tint: .appAccent,
+                fill: .appAccentSoft
+            ) {
+                isPresentingInviteSheet = true
+            }
+            actionTile(
+                title: "직접 직원 등록",
+                subtitle: "이름과 시급만 입력",
+                systemImage: "square.and.pencil",
+                tint: .appLavender,
+                fill: .appLavenderSoft
+            ) {
+                guard selectedStoreId != nil else { return }
+                isPresentingCreateWorker = true
             }
         }
+    }
+
+    private func actionTile(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        tint: Color,
+        fill: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundColor(tint)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.appTextPrimary)
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(.appTextSecondary)
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .background(fill)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(PressableRowStyle())
     }
 
     @ViewBuilder
@@ -409,18 +514,18 @@ struct StoreHomeView: View {
                 )
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "book.closed.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                    Image(systemName: "book.closed")
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.appAccent)
-                        .frame(width: 36, height: 36)
-                        .background(Color.appAccent.opacity(0.1))
-                        .clipShape(Circle())
+                        .frame(width: 40, height: 40)
+                        .background(Color.appAccentSoft)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("가게 관리")
-                            .font(.app(.body, .semibold))
+                        Text("가게 매뉴얼·공지")
+                            .font(.app(.body, .bold))
                             .foregroundColor(.appTextPrimary)
-                        Text("매뉴얼과 공지를 등록하면 챗봇이 대신 답해요")
-                            .font(.app(.caption, .medium))
+                        Text("올려두면 챗봇이 직원 질문에 대신 답해요")
+                            .font(.app(.caption))
                             .foregroundColor(.appTextSecondary)
                     }
                     Spacer()
@@ -428,10 +533,17 @@ struct StoreHomeView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.appTextSecondary)
                 }
-                .appCard()
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+                .background(Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
             }
             .buttonStyle(PressableRowStyle())
         }
+    }
+
+    private var todayText: String {
+        AppTime.displayFormatter("M월 d일 EEEE").string(from: Date())
     }
 
     private var currentMonthText: String {

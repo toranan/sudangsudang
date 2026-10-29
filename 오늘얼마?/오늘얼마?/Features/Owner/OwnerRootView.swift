@@ -23,52 +23,44 @@ struct OwnerRootView: View {
                 })
                     .toolbar(.hidden, for: .navigationBar)
             }
-            .tabItem {
-                Image(systemName: "house.fill")
-                Text("홈")
-            }
+            .hidesSystemTabBar()
             .tag(Tab.home)
 
             NavigationStack {
                 WorkerManagementView()
                     .toolbar(.hidden, for: .navigationBar)
             }
-            .tabItem {
-                Image(systemName: "person.2.fill")
-                Text("알바관리")
-            }
+            .hidesSystemTabBar()
             .tag(Tab.workers)
 
             NavigationStack {
                 ScheduleManagementView()
                     .toolbar(.hidden, for: .navigationBar)
             }
-            .tabItem {
-                Image(systemName: "calendar.badge.clock")
-                Text("스케줄")
-            }
+            .hidesSystemTabBar()
             .tag(Tab.schedule)
 
             NavigationStack {
                 ApprovalView()
                     .toolbar(.hidden, for: .navigationBar)
             }
-            .tabItem {
-                Image(systemName: "checkmark.circle.fill")
-                Text("승인")
-            }
+            .hidesSystemTabBar()
             .tag(Tab.approval)
 
             NavigationStack {
                 OwnerSettingsView()
                     .toolbar(.hidden, for: .navigationBar)
             }
-            .tabItem {
-                Image(systemName: "gearshape.fill")
-                Text("설정")
-            }
+            .hidesSystemTabBar()
             .tag(Tab.settings)
         }
+        .appTabBar(selection: $selection, items: [
+            AppTabItem(tag: .home, title: "홈", systemImage: "house.fill"),
+            AppTabItem(tag: .workers, title: "알바관리", systemImage: "person.2.fill"),
+            AppTabItem(tag: .schedule, title: "스케줄", systemImage: "calendar"),
+            AppTabItem(tag: .approval, title: "승인", systemImage: "checkmark.circle.fill"),
+            AppTabItem(tag: .settings, title: "설정", systemImage: "gearshape.fill")
+        ])
         .tint(.appAccent)
         .task {
             await maybeShowProfileWelcome()
