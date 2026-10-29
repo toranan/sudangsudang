@@ -79,8 +79,12 @@ struct WorkerStoreChatView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
                 .scrollDismissesKeyboard(.interactively)
+                // 대화 영역을 누르면 키보드를 내린다. 추천 질문 버튼은 그대로 눌린다.
+                .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
                 .onChange(of: messages.count) { _ in scrollToBottom(proxy) }
                 .onChange(of: isAsking) { _ in scrollToBottom(proxy) }
             }
@@ -122,6 +126,12 @@ struct WorkerStoreChatView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture { dismissKeyboard() }
+    }
+
+    private func dismissKeyboard() {
+        if isInputFocused { isInputFocused = false }
     }
 
     private var emptyState: some View {
