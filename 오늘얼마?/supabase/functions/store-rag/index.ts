@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Anthropic from "npm:@anthropic-ai/sdk";
 
 type StoreRagRequest =
   | {
@@ -21,15 +22,6 @@ type EmbeddingResponse = {
   error?: { message?: string };
 };
 
-type GeminiResponse = {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{ text?: string }>;
-    };
-  }>;
-  error?: { message?: string };
-};
-
 type MatchRow = {
   id: string;
   title: string;
@@ -43,12 +35,22 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
 const OPENAI_EMBEDDING_MODEL =
   Deno.env.get("OPENAI_EMBEDDING_MODEL") ?? "text-embedding-3-small";
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash";
+// 임베딩은 OpenAI, 답변 생성은 Claude.
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+const ANTHROPIC_MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-opus-5-5";
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !OPENAI_API_KEY || !GEMINI_API_KEY) {
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !OPENAI_API_KEY || !ANTHROPIC_API_KEY) {
   throw new Error("Missing required RAG env vars.");
 }
+
+const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+
+const ANSWER_SYSTEM_PROMPT = [
+  "너는 매장 내부 매뉴얼과 공지만 근거로 답하는 알바 업무 도우미다.",
+  "주어진 문서에 없는 내용은 추측하지 말고, 문서에서 찾지 못했다고 말한 뒤 사장님께 확인해 보라고 안내한다.",
+  "답변은 한국어로 짧고 구체적으로 쓴다. 순서가 있는 내용이면 번호를 붙인다.",
+  "마지막 줄에 참고한 문서 제목을 '참고: 제목' 형식으로 붙인다.",
+].join("\n");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -212,44 +214,31 @@ async function generateAnswer(question: string, matches: MatchRow[]) {
     )
     .join("\n\n");
 
-  const prompt = [
-    "너는 매장 내부 매뉴얼과 공지만 근거로 답하는 알바 업무 도우미다.",
-    "아래 문서에 없는 내용은 추측하지 말고 모른다고 답한다.",
-    "답변은 한국어로 짧고 구체적으로 작성한다.",
-    "마지막 줄에 참고 문서 제목을 붙인다.",
-    "",
-    `질문: ${question}`,
-    "",
-    `문서:\n${context}`,
-  ].join("\n");
+  const response = await anthropic.beta.messages.create({
+    model: ANTHROPIC_MODEL,
+    max_tokens: 2048,
+    // 짧은 문서 Q&A라 깊은 추론이 필요 없다.
+    output_config: { effort: "low" },
+    // 안전 분류기가 거절하면 서버가 다른 모델로 자동 재시도한다.
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    system: ANSWER_SYSTEM_PROMPT,
+    messages: [{
+      role: "user",
+      content: `<documents>\n${context}\n</documents>\n\n질문: ${question}`,
+    }],
+  } as Parameters<typeof anthropic.beta.messages.create>[0]);
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 512,
-        },
-      }),
-    },
-  );
-
-  const body = (await response.json()) as GeminiResponse;
-  if (!response.ok) {
-    throw new Error(body.error?.message ?? "Gemini request failed");
+  if (response.stop_reason === "refusal") {
+    throw new Error("Claude declined to answer");
   }
-
-  const text = body.candidates?.[0]?.content?.parts
-    ?.map((part) => part.text ?? "")
+  const text = response.content
+    .map((block) => (block.type === "text" ? block.text : ""))
     .join("")
     .trim();
 
   if (!text) {
-    throw new Error("Gemini response missing answer");
+    throw new Error("Claude response missing answer");
   }
   return text;
 }
