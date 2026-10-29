@@ -19,6 +19,27 @@ enum PayrollDeductionType: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// 무급 휴게 방식. DB의 break_policy / applied_break_policy 값과 같다.
+enum PayrollBreakPolicy: String, CaseIterable, Identifiable, Codable {
+    case none
+    case statutory
+    case custom
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .none: return "없음"
+        case .statutory: return "법정 기준"
+        case .custom: return "직접 입력"
+        }
+    }
+
+    init(rawOrNone raw: String?) {
+        self = raw.flatMap(PayrollBreakPolicy.init(rawValue:)) ?? .none
+    }
+}
+
 struct PayrollDeductionLineItem: Identifiable {
     let id: String
     let title: String
@@ -77,17 +98,59 @@ enum PayrollCalculator {
         return max(0, Int(floor(total / 60.0)))
     }
 
+    // 법정 최소 휴게(근로기준법 54조: 4시간 30분, 8시간 1시간)를 체류시간으로 환산한다.
+    // 체류 4시간 이상이면 휴게 없이는 실근로가 4시간 이상이 되므로 30분,
+    // 체류 8시간 30분 이상이면 30분만 쉬어도 실근로가 8시간 이상이 되므로 60분.
+    static func statutoryBreakMinutes(stayMinutes: Int) -> Int {
+        if stayMinutes >= 8 * 60 + 30 { return 60 }
+        if stayMinutes >= 4 * 60 { return 30 }
+        return 0
+    }
+
+    static func breakMinutes(stayMinutes: Int, policy: PayrollBreakPolicy, customMinutes: Int) -> Int {
+        let stay = max(0, stayMinutes)
+        switch policy {
+        case .none: return 0
+        case .statutory: return min(stay, statutoryBreakMinutes(stayMinutes: stay))
+        case .custom: return min(stay, max(0, customMinutes))
+        }
+    }
+
+    // 휴게를 법정 최소보다 적게 주는 설정인지. 사장님 안내 문구에만 쓴다.
+    static func isBreakBelowStatutory(stayMinutes: Int, policy: PayrollBreakPolicy, customMinutes: Int) -> Bool {
+        breakMinutes(stayMinutes: stayMinutes, policy: policy, customMinutes: customMinutes)
+            < statutoryBreakMinutes(stayMinutes: stayMinutes)
+    }
+
+    static func calcPaidMinutes(
+        checkIn: Date,
+        checkOut: Date?,
+        breakPolicy: PayrollBreakPolicy,
+        customBreakMinutes: Int
+    ) -> Int {
+        let stay = calcMinutes(checkIn: checkIn, checkOut: checkOut)
+        return stay - breakMinutes(stayMinutes: stay, policy: breakPolicy, customMinutes: customBreakMinutes)
+    }
+
     static func grossPay(
         checkIn: Date,
         checkOut: Date?,
         wage: Double,
-        applyNightAllowance: Bool
+        applyNightAllowance: Bool,
+        breakPolicy: PayrollBreakPolicy = .none,
+        customBreakMinutes: Int = 0
     ) -> Double {
-        let minutes = calcMinutes(checkIn: checkIn, checkOut: checkOut)
-        let basePay = Double(minutes) / 60.0 * wage
+        let paidMinutes = calcPaidMinutes(
+            checkIn: checkIn,
+            checkOut: checkOut,
+            breakPolicy: breakPolicy,
+            customBreakMinutes: customBreakMinutes
+        )
+        let basePay = Double(paidMinutes) / 60.0 * wage
         guard applyNightAllowance else { return basePay }
 
-        let nightMinutes = calcNightMinutes(checkIn: checkIn, checkOut: checkOut)
+        // 휴게 시각은 기록하지 않으므로 주간에 쉰 것으로 보고, 야간 가산은 유급 시간을 넘지 않게 한다.
+        let nightMinutes = min(paidMinutes, calcNightMinutes(checkIn: checkIn, checkOut: checkOut))
         let nightPremium = Double(nightMinutes) / 60.0 * wage * nightPremiumRate
         return basePay + nightPremium
     }
@@ -98,13 +161,17 @@ enum PayrollCalculator {
         appliedHourlyWage: Double?,
         appliedNightAllowance: Bool?,
         fallbackHourlyWage: Double,
-        fallbackNightAllowance: Bool
+        fallbackNightAllowance: Bool,
+        appliedBreakPolicy: String? = nil,
+        appliedBreakMinutes: Int? = nil
     ) -> Double {
         grossPay(
             checkIn: checkIn,
             checkOut: checkOut,
             wage: appliedHourlyWage ?? fallbackHourlyWage,
-            applyNightAllowance: appliedNightAllowance ?? fallbackNightAllowance
+            applyNightAllowance: appliedNightAllowance ?? fallbackNightAllowance,
+            breakPolicy: PayrollBreakPolicy(rawOrNone: appliedBreakPolicy),
+            customBreakMinutes: appliedBreakMinutes ?? 0
         )
     }
 
