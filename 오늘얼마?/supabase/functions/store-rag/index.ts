@@ -37,7 +37,7 @@ const OPENAI_EMBEDDING_MODEL =
   Deno.env.get("OPENAI_EMBEDDING_MODEL") ?? "text-embedding-3-small";
 // 임베딩은 OpenAI, 답변 생성은 Claude.
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
-const ANTHROPIC_MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-opus-5-5";
+const ANTHROPIC_MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-sonnet-5-5";
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !OPENAI_API_KEY || !ANTHROPIC_API_KEY) {
   throw new Error("Missing required RAG env vars.");
