@@ -818,7 +818,8 @@ struct ScheduleManagementView: View {
             }
         }
 
-        while items.count % 7 != 0 {
+        // 달마다 4~6주로 줄 수가 달라 높이가 흔들리지 않게 항상 6주(42칸)로 채운다.
+        while items.count < 42 {
             items.append(MonthDay(id: "trailing-\(items.count)", date: nil))
         }
 
