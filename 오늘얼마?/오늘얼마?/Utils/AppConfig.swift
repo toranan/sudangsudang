@@ -78,6 +78,12 @@ enum AppErrorMessage {
         if raw.isEmpty {
             return fallback
         }
+        // 기기 언어로 번역된 시스템 오류(디코딩 실패 등)는 한국어여도 개발자용이라 그대로 보여주지 않는다.
+        if error is DecodingError || error is EncodingError ||
+            (error as NSError).domain == NSCocoaErrorDomain ||
+            raw.contains("작업을 완료할 수 없습니다") {
+            return fallback
+        }
         if containsKorean(raw) {
             return raw
         }

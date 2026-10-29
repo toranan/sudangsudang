@@ -126,7 +126,7 @@ struct StoreInviteSheet: View {
     }
 
     private func shareMessage(code: String) -> String {
-        "[수당수당] \(storeName) 매장 코드: \(code)\n앱에서 '초대코드 입력하기'에 넣어주세요.\nhowmuch://invite?token=\(code)"
+        "[수당수당] \(storeName) 매장 코드: \(code)\n\n앱이 있으면 바로 연결: howmuch://invite?token=\(code)\n앱이 없으면 설치 후 '매장 코드 입력하기'에 넣어주세요.\nhttps://apps.apple.com/kr/app/id6758724381"
     }
 
     @MainActor

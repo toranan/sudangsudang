@@ -247,12 +247,12 @@ struct WorkerHomeView: View {
                     Text("아직 등록된 매장이 없어요")
                         .font(.app(.headline, .bold))
                         .foregroundColor(.appTextPrimary)
-                    Text("사장님께 받은 초대코드를 입력하거나, 혼자 쓰는 매장을 직접 추가할 수 있어요.")
+                    Text("사장님께 받은 매장 코드를 입력하거나, 혼자 쓰는 매장을 직접 추가할 수 있어요.")
                         .font(.app(.callout))
                         .foregroundColor(.appTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Button(action: { isPresentingJoinStore = true }) {
-                        Text("초대코드 입력하기")
+                        Text("매장 코드 입력하기")
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     Button(action: { isPresentingPersonalStore = true }) {
@@ -324,7 +324,7 @@ struct WorkerHomeView: View {
 
             HStack(spacing: 10) {
                 ActionTile(
-                    title: "초대코드 입력",
+                    title: "매장 코드 입력",
                     subtitle: "사장님 매장 연결",
                     systemImage: "number"
                 ) {
