@@ -441,8 +441,8 @@ struct WorkerHomeView: View {
             .background(store.todayMinutes > 0 ? Color.appAccentSoft : Color.appFill, in: Capsule())
 
             Text(store.todayPayText)
-                .font(.system(size: 46, weight: .heavy))
-                .tracking(-1.5)
+                .font(.system(size: 36, weight: .heavy))
+                .tracking(-1.2)
                 .monospacedDigit()
                 .foregroundColor(.appTextPrimary)
                 .lineLimit(1)
@@ -460,12 +460,12 @@ struct WorkerHomeView: View {
                 Text("출근 · 퇴근하기")
             }
             .buttonStyle(PrimaryButtonStyle())
-            .padding(.top, 18)
+            .padding(.top, 16)
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 22)
-        .padding(.top, 24)
-        .padding(.bottom, 22)
+        .padding(.top, 20)
+        .padding(.bottom, 20)
         .background(Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
     }
@@ -477,8 +477,8 @@ struct WorkerHomeView: View {
                     .font(.app(.callout, .medium))
                     .foregroundColor(.white.opacity(0.8))
                 Text(store.monthPayText)
-                    .font(.system(size: 28, weight: .heavy))
-                    .tracking(-0.8)
+                    .font(.system(size: 23, weight: .heavy))
+                    .tracking(-0.6)
                     .foregroundColor(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -490,12 +490,12 @@ struct WorkerHomeView: View {
                     .font(.app(.caption, .medium))
                     .foregroundColor(.white.opacity(0.8))
                 Text(paydayDDayText(store))
-                    .font(.system(size: 20, weight: .heavy))
+                    .font(.system(size: 18, weight: .heavy))
                     .foregroundColor(.white)
             }
         }
         .padding(.horizontal, 22)
-        .padding(.vertical, 20)
+        .padding(.vertical, 16)
         .background(Color.appAccent)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
@@ -679,7 +679,7 @@ struct WorkerHomeView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Text(totalMonthPayText)
-                        .font(.system(size: 26, weight: .heavy))
+                        .font(.system(size: 23, weight: .heavy))
                         .tracking(-0.6)
                         .foregroundColor(.appTextPrimary)
                         .lineLimit(1)

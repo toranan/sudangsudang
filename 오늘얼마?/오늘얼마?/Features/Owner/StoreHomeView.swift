@@ -325,11 +325,11 @@ struct StoreHomeView: View {
                 if isLoadingSummary && !didLoadSummary {
                     ProgressView()
                         .tint(.white)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
                 } else {
                     Text(formatWon(actualPay + projectedPay))
-                        .font(.system(size: 34, weight: .heavy))
-                        .tracking(-1)
+                        .font(.system(size: 28, weight: .heavy))
+                        .tracking(-0.8)
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -344,7 +344,7 @@ struct StoreHomeView: View {
                         }
                     }
                     .frame(height: 6)
-                    .padding(.top, 10)
+                    .padding(.top, 8)
 
                     HStack {
                         Text("지금까지 \(formatWon(actualPay))")
@@ -357,7 +357,7 @@ struct StoreHomeView: View {
                 }
             }
             .padding(.horizontal, 22)
-            .padding(.vertical, 20)
+            .padding(.vertical, 18)
             .background(Color.appAccent)
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         }

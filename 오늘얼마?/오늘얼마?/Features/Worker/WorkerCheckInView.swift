@@ -204,8 +204,8 @@ struct WorkerCheckInView: View {
                     .font(.app(.callout, .medium))
                     .foregroundColor(.white.opacity(0.8))
                 Text(store.monthPayText)
-                    .font(.system(size: 28, weight: .heavy))
-                    .tracking(-0.8)
+                    .font(.system(size: 23, weight: .heavy))
+                    .tracking(-0.6)
                     .foregroundColor(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -219,7 +219,7 @@ struct WorkerCheckInView: View {
                     .font(.app(.caption, .medium))
                     .foregroundColor(.white.opacity(0.8))
                 Text(paydayDDayText())
-                    .font(.system(size: 20, weight: .heavy))
+                    .font(.system(size: 18, weight: .heavy))
                     .foregroundColor(.white)
                 Text(nextPaydayDateText())
                     .font(.app(.caption, .medium))
@@ -227,7 +227,7 @@ struct WorkerCheckInView: View {
             }
         }
         .padding(.horizontal, 22)
-        .padding(.vertical, 20)
+        .padding(.vertical, 18)
         .background(Color.appAccent)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
