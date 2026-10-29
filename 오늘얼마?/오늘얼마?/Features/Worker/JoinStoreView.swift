@@ -11,6 +11,7 @@ struct JoinStoreView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var token: String = ""
     @State private var error: String?
+    @FocusState private var isTokenFocused: Bool
 
     let onSubmit: (String) -> Void
 
@@ -35,6 +36,7 @@ struct JoinStoreView: View {
                     TextField("사장님이 보내준 매장 코드", text: $token)
                         .keyboardType(.numberPad)
                         .autocorrectionDisabled()
+                        .focused($isTokenFocused)
                         .appInputField()
 
                     if let error {
@@ -63,6 +65,8 @@ struct JoinStoreView: View {
             }
             .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .contentShape(Rectangle())
+            .onTapGesture { isTokenFocused = false }
             .background(Color.appBackground.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }

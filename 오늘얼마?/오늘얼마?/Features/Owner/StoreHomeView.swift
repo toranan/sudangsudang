@@ -1035,6 +1035,7 @@ struct CreateStoreView: View {
                 }
                 .padding(20)
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("매장 등록")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1199,6 +1200,9 @@ struct CreateWorkerView: View {
                 Spacer()
             }
             .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .contentShape(Rectangle())
+            .onTapGesture { hideKeyboard() }
             .navigationTitle("직접 직원 등록")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
