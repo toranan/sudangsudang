@@ -57,7 +57,8 @@ struct WorkerCheckInView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 4)
-            .padding(.bottom, 24)
+            // 탭바 안쪽으로 밀려 들어온 화면이라 탭바 높이만큼 더 내려가게 둔다.
+            .padding(.bottom, appTabBarReservedHeight + 24)
         }
         .appRefreshable {
             await loadCurrentLog()
@@ -133,14 +134,14 @@ struct WorkerCheckInView: View {
             .background(isCheckedIn ? Color.appAccentSoft : Color.appFill, in: Capsule())
 
             Text(timerText(displayMinutes))
-                .font(.system(size: 56, weight: .heavy))
-                .tracking(-2)
+                .font(.system(size: 44, weight: .heavy))
+                .tracking(-1.5)
                 .monospacedDigit()
                 .foregroundColor(.appTextPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .contentTransition(.numericText())
-                .padding(.top, 8)
+                .padding(.top, 4)
 
             HStack(spacing: 0) {
                 Text("오늘 ")
@@ -167,7 +168,7 @@ struct WorkerCheckInView: View {
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(isLoadingAction)
-            .padding(.top, 20)
+            .padding(.top, 14)
 
             Text(isCheckedIn ? "\(store.name)에서 근무 중" : "\(store.name) 출근 대기")
                 .font(.system(size: 12))
@@ -184,8 +185,8 @@ struct WorkerCheckInView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 22)
-        .padding(.top, 26)
-        .padding(.bottom, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 16)
         .background(Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
     }
@@ -1490,7 +1491,7 @@ private struct WorkerStoreHistoryView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .padding(.bottom, appTabBarReservedHeight + 24)
         }
         .appRefreshable {
             await refreshFromUser()

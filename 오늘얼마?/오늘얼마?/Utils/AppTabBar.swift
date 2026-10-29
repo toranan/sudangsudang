@@ -67,7 +67,7 @@ struct AppTabBar<Tag: Hashable>: View {
 }
 
 // 탭바(42 + 위아래 8씩)와 아래 여백을 합친 높이. 스크롤 끝이 탭바에 가리지 않게 이만큼 비워 둔다.
-private let appTabBarReservedHeight: CGFloat = 70
+let appTabBarReservedHeight: CGFloat = 70
 
 extension View {
     // TabView에 붙여 AppTabBar를 아래에 띄운다. 각 탭에는 .hidesSystemTabBar()를 붙인다.
