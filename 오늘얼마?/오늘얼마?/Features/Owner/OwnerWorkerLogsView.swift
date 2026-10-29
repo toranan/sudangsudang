@@ -24,8 +24,18 @@ struct OwnerWorkerLogsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: workerName, trailing: "이번 달 근무")
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(workerName)
+                        .font(.system(size: 26, weight: .heavy))
+                        .tracking(-0.6)
+                        .foregroundColor(.appTextPrimary)
+                    Text("이번 달 근무 \(logs.count)건")
+                        .font(.app(.callout, .medium))
+                        .foregroundColor(.appTextSecondary)
+                }
+                .padding(.horizontal, 4)
+                .padding(.top, 4)
 
                 if isLoading && logs.isEmpty {
                     ProgressView()
@@ -33,15 +43,25 @@ struct OwnerWorkerLogsView: View {
                         .appCard()
                 } else if logs.isEmpty {
                     Text("근무 내역이 없어요.")
-                        .font(.app(.caption, .medium))
+                        .font(.app(.callout, .medium))
                         .foregroundColor(.appTextSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .appCard()
                 } else {
-                    VStack(spacing: 10) {
-                        ForEach(logs) { log in
+                    VStack(spacing: 0) {
+                        ForEach(Array(logs.enumerated()), id: \.element.id) { index, log in
+                            if index > 0 {
+                                Rectangle()
+                                    .fill(Color.appLine)
+                                    .frame(height: 1)
+                            }
                             logRow(log)
                         }
                     }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 4)
+                    .background(Color.appSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                 }
 
                 if let loadError {
@@ -50,7 +70,7 @@ struct OwnerWorkerLogsView: View {
                         .foregroundColor(.appWarning)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
         .appRefreshable {
@@ -66,21 +86,29 @@ struct OwnerWorkerLogsView: View {
 
     private func logRow(_ log: LogRow) -> some View {
         let (minutes, rangeText) = computeMinutesAndRange(log)
+        let color = normalizedStatus(log.status) == "pending" ? Color.appCaution : statusColor(log.status)
         return HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(rangeText)
-                    .font(.app(.callout, .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.appTextPrimary)
-                Text("\(formatHours(minutes)) · \(statusLabel(log.status))")
-                    .font(.app(.caption, .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Text(formatHours(minutes))
+                    .font(.app(.caption))
                     .foregroundColor(.appTextSecondary)
             }
-            Spacer()
-            StatusPill(text: statusLabel(log.status), color: statusColor(log.status))
+            Spacer(minLength: 8)
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 7, height: 7)
+                Text(statusLabel(log.status))
+                    .font(.app(.caption, .semibold))
+                    .foregroundColor(color)
+            }
         }
-        .padding(14)
-        .background(Color.appSurface)
-        .cornerRadius(16)
+        .padding(.vertical, 13)
     }
 
     @MainActor

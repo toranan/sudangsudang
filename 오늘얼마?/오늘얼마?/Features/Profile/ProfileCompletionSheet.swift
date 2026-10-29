@@ -56,56 +56,88 @@ struct ProfileCompletionSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 14) {
-                Text(context.title)
-                    .font(.app(.headline, .bold))
-                    .foregroundColor(.appTextPrimary)
-
-                Text(context.message)
-                    .font(.app(.caption, .medium))
-                    .foregroundColor(.appTextSecondary)
-
-                VStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("표시 이름")
-                            .font(.app(.caption, .semibold))
-                            .foregroundColor(.appTextSecondary)
-                        TextField("예: 홍길동", text: $name)
-                            .textContentType(.name)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            .appInputField()
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("전화번호")
-                            .font(.app(.caption, .semibold))
-                            .foregroundColor(.appTextSecondary)
-                        TextField("010-1234-5678", text: $phone)
-                            .keyboardType(.phonePad)
-                            .textContentType(.telephoneNumber)
-                            .onChange(of: phone) { newValue in
-                                let formatted = formatPhone(newValue)
-                                if formatted != newValue {
-                                    phone = formatted
-                                }
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    HStack {
+                        Spacer()
+                        if canDismissManually {
+                            Button(action: { dismiss() }) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.appTextPrimary)
+                                    .frame(width: 40, height: 40)
+                                    .background(Color.appFill)
+                                    .clipShape(Circle())
                             }
-                            .appInputField()
+                            .accessibilityLabel("닫기")
+                            .disabled(isSaving)
+                        }
+                    }
+                    .frame(minHeight: 40)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(context.title)
+                            .font(.system(size: 24, weight: .heavy))
+                            .tracking(-0.5)
+                            .foregroundColor(.appTextPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text(context.message)
+                            .font(.app(.callout))
+                            .foregroundColor(.appTextSecondary)
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("표시 이름")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.appTextSecondary)
+                            TextField("예: 홍길동", text: $name)
+                                .textContentType(.name)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                                .appInputField()
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("전화번호")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.appTextSecondary)
+                            TextField("010-1234-5678", text: $phone)
+                                .keyboardType(.phonePad)
+                                .textContentType(.telephoneNumber)
+                                .onChange(of: phone) { newValue in
+                                    let formatted = formatPhone(newValue)
+                                    if formatted != newValue {
+                                        phone = formatted
+                                    }
+                                }
+                                .appInputField()
+                        }
+                    }
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.app(.caption, .medium))
+                            .foregroundColor(.appWarning)
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 24)
+            }
+            .scrollDismissesKeyboard(.interactively)
 
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appWarning)
-                }
-
+            VStack(spacing: 6) {
                 Button {
                     Task { await save() }
                 } label: {
                     if isSaving {
                         ProgressView()
+                            .tint(.appOnInk)
                             .frame(maxWidth: .infinity)
                     } else {
                         Text(context.primaryActionTitle)
@@ -113,34 +145,28 @@ struct ProfileCompletionSheet: View {
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(isSaving || (context.requiresName && name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
-                .opacity((isSaving || (context.requiresName && name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)) ? 0.7 : 1.0)
 
                 if context.showsSkip {
                     Button {
                         Task { await skip() }
                     } label: {
                         Text(context.skipTitle)
+                            .font(.app(.callout, .semibold))
+                            .foregroundColor(.appTextSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .buttonStyle(PressableRowStyle())
                     .disabled(isSaving)
                 }
-
-                Spacer()
             }
-            .padding(20)
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if canDismissManually {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("닫기") { dismiss() }
-                            .disabled(isSaving)
-                    }
-                }
-            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
         }
+        .background(Color.appSurface.ignoresSafeArea())
         .interactiveDismissDisabled(isSaving || !canDismissManually)
-        .background(Color.appBackground.ignoresSafeArea())
     }
 
     private var canDismissManually: Bool {

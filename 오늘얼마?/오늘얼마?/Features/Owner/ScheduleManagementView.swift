@@ -114,13 +114,25 @@ struct ScheduleManagementView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("스케줄")
+                        .font(.system(size: 26, weight: .heavy))
+                        .tracking(-0.6)
+                        .foregroundColor(.appTextPrimary)
+                    Spacer()
+                    if isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.top, 8)
+
                 if !stores.isEmpty {
                     storePicker
                 }
 
                 templateSection
-
-                monthHeader
 
                 calendarGrid
 
@@ -132,7 +144,7 @@ struct ScheduleManagementView: View {
                         .foregroundColor(.appWarning)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
         .appRefreshable {
@@ -190,118 +202,105 @@ struct ScheduleManagementView: View {
 
     private var storePicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(stores) { store in
-                    let isSelected = store.id == selectedStoreId
-                    Button(action: { selectedStoreId = store.id }) {
-                        Text(store.name)
-                            .font(.app(.caption, .semibold))
-                            .foregroundColor(isSelected ? .white : .appTextPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(isSelected ? Color.appAccent : Color.appSurface)
-                            .cornerRadius(999)
+                    ScheduleChip(
+                        title: store.name,
+                        isSelected: store.id == selectedStoreId,
+                        unselectedFill: .appSurface
+                    ) {
+                        selectedStoreId = store.id
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
         }
     }
 
     private var templateSection: some View {
-        HStack(spacing: 12) {
-            Text("주간 설정")
-                .font(.app(.body, .semibold))
-                .foregroundColor(.appTextPrimary)
-
-            Spacer()
-
-            Button("설정하기") {
-                isPresentingTemplateManager = true
-            }
-            .font(.app(.caption, .semibold))
-            .foregroundColor(.appAccent)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.appFill)
-            .cornerRadius(999)
+        ActionTile(
+            title: "주간 설정",
+            subtitle: "요일마다 같은 근무를 자동으로 채워요",
+            systemImage: "repeat",
+            tint: .appLavender,
+            fill: .appLavenderSoft
+        ) {
+            isPresentingTemplateManager = true
         }
-        .appCard()
     }
 
     private var monthHeader: some View {
-        HStack(spacing: 12) {
-            Button(action: {
-                currentMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth
-            }) {
-                Image(systemName: "chevron.left")
-            }
-            .buttonStyle(SecondaryButtonStyle())
-
+        HStack(spacing: 8) {
             Text(monthTitle)
-                .font(.app(.body, .semibold))
+                .font(.system(size: 19, weight: .heavy))
+                .tracking(-0.4)
                 .foregroundColor(.appTextPrimary)
-
-            Button(action: {
-                currentMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth
-            }) {
-                Image(systemName: "chevron.right")
-            }
-            .buttonStyle(SecondaryButtonStyle())
 
             Spacer()
 
-            if isLoading {
-                ProgressView()
-            }
+            monthStepButton(systemImage: "chevron.left", value: -1)
+            monthStepButton(systemImage: "chevron.right", value: 1)
         }
+    }
+
+    private func monthStepButton(systemImage: String, value: Int) -> some View {
+        Button(action: {
+            currentMonth = calendar.date(byAdding: .month, value: value, to: currentMonth) ?? currentMonth
+        }) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.appTextPrimary)
+                .frame(width: 34, height: 34)
+                .background(Color.appFill)
+                .clipShape(Circle())
+        }
+        .buttonStyle(PressableRowStyle())
     }
 
     private var calendarGrid: some View {
         let days = makeMonthDays()
         let counts = entryCountsByDate
 
-        return VStack(spacing: 8) {
-            HStack {
-                ForEach(["일", "월", "화", "수", "목", "금", "토"], id: \.self) { day in
-                    Text(day)
-                        .font(.app(.caption, .semibold))
-                        .foregroundColor(.appTextSecondary)
-                        .frame(maxWidth: .infinity)
+        return VStack(spacing: 14) {
+            monthHeader
+
+            VStack(spacing: 6) {
+                HStack(spacing: 4) {
+                    ForEach(["일", "월", "화", "수", "목", "금", "토"], id: \.self) { day in
+                        Text(day)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.appTextSecondary)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
-            }
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
-                ForEach(days) { day in
-                    if let date = day.date {
-                        let isSelected = selectedDate.map { calendar.isDate($0, inSameDayAs: date) } ?? false
-                        let count = counts[calendar.startOfDay(for: date)] ?? 0
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                    ForEach(days) { day in
+                        if let date = day.date {
+                            let isSelected = selectedDate.map { calendar.isDate($0, inSameDayAs: date) } ?? false
+                            let isToday = calendar.isDateInToday(date)
+                            let count = counts[calendar.startOfDay(for: date)] ?? 0
 
-                        Button(action: {
-                            selectedDate = date
-                        }) {
-                            VStack(spacing: 4) {
-                                Text("\(calendar.component(.day, from: date))")
-                                    .font(.app(.caption, .semibold))
-                                    .foregroundColor(isSelected ? .white : .appTextPrimary)
-                                if count > 0 {
-                                    Text("\(count)명")
-                                        .font(.app(.caption, .semibold))
-                                        .foregroundColor(isSelected ? .white.opacity(0.9) : .appTextSecondary)
-                                } else {
-                                    Text(" ")
-                                        .font(.app(.caption, .semibold))
+                            Button(action: {
+                                selectedDate = date
+                            }) {
+                                VStack(spacing: 3) {
+                                    Text("\(calendar.component(.day, from: date))")
+                                        .font(.system(size: 15, weight: isSelected || isToday ? .bold : .medium))
+                                        .foregroundColor(isSelected ? .appOnInk : (isToday ? .appAccent : .appTextPrimary))
+                                    Text(count > 0 ? "\(count)명" : " ")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(isSelected ? .appOnInk.opacity(0.75) : .appAccent)
                                 }
+                                .frame(maxWidth: .infinity, minHeight: 46)
+                                .background(isSelected ? Color.appInk : Color.clear)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .contentShape(Rectangle())
                             }
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .padding(.vertical, 6)
-                            .background(isSelected ? Color.appAccent : Color.appSurface)
-                            .cornerRadius(10)
+                            .buttonStyle(.plain)
+                        } else {
+                            Color.clear.frame(height: 46)
                         }
-                        .buttonStyle(.plain)
-                    } else {
-                        Color.clear.frame(height: 44)
                     }
                 }
             }
@@ -312,50 +311,90 @@ struct ScheduleManagementView: View {
     private var dayScheduleSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let selectedDate {
-                SectionHeader(title: dayTitle(selectedDate), trailing: "근무 추가") {
-                    entryEditorContext = .create(date: selectedDate)
+                HStack {
+                    Text(dayTitle(selectedDate))
+                        .font(.system(size: 19, weight: .heavy))
+                        .tracking(-0.4)
+                        .foregroundColor(.appTextPrimary)
+                    Spacer()
+                    Button(action: { entryEditorContext = .create(date: selectedDate) }) {
+                        Label("근무 추가", systemImage: "plus")
+                            .labelStyle(AppButtonLabelStyle())
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.appOnInk)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.appInk)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(PressableRowStyle())
                 }
+                .padding(.horizontal, 4)
+                .padding(.top, 4)
 
                 let dayEntries = entriesForDay(selectedDate)
                 if dayEntries.isEmpty {
                     Text("등록된 근무가 없어요.")
-                        .font(.app(.caption, .medium))
+                        .font(.app(.callout, .medium))
                         .foregroundColor(.appTextSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .appCard()
                 } else {
-                    VStack(spacing: 10) {
-                        ForEach(dayEntries) { entry in
+                    VStack(spacing: 0) {
+                        ForEach(Array(dayEntries.enumerated()), id: \.element.id) { index, entry in
+                            if index > 0 {
+                                Rectangle()
+                                    .fill(Color.appLine)
+                                    .frame(height: 1)
+                            }
                             Button(action: {
                                 entryEditorContext = .edit(date: selectedDate, row: entry)
                             }) {
-                                HStack(spacing: 10) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(entry.workers?.name ?? workerName(entry.worker_id))
-                                            .font(.app(.callout, .semibold))
+                                let name = entry.workers?.name ?? workerName(entry.worker_id)
+                                let isTemplate = entry.source == "template"
+                                HStack(spacing: 12) {
+                                    Text(String(name.prefix(1)))
+                                        .font(.system(size: 15, weight: .bold))
+                                        .foregroundColor(isTemplate ? .appAccent : .appLavender)
+                                        .frame(width: 40, height: 40)
+                                        .background(isTemplate ? Color.appAccentSoft : Color.appLavenderSoft)
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(name)
+                                            .font(.system(size: 16, weight: .bold))
                                             .foregroundColor(.appTextPrimary)
                                         Text(formatTimeRange(start: entry.check_in_time, end: entry.check_out_time))
-                                            .font(.app(.caption, .medium))
+                                            .font(.app(.caption))
                                             .foregroundColor(.appTextSecondary)
                                     }
 
                                     Spacer()
 
-                                    StatusPill(
-                                        text: entry.source == "template" ? "자동" : "수동",
-                                        color: entry.source == "template" ? .appAccent : .appTextSecondary
-                                    )
+                                    HStack(spacing: 6) {
+                                        Circle()
+                                            .fill(isTemplate ? Color.appAccent : Color.appTextSecondary)
+                                            .frame(width: 7, height: 7)
+                                        Text(isTemplate ? "자동" : "수동")
+                                            .font(.app(.caption, .semibold))
+                                            .foregroundColor(isTemplate ? .appAccent : .appTextSecondary)
+                                    }
                                 }
-                                .appInputField()
+                                .padding(.vertical, 12)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(PressableRowStyle())
                         }
                     }
-                    .appCard()
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 4)
+                    .background(Color.appSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                 }
             } else {
                 Text("날짜를 선택하면 해당 일자의 근무자를 볼 수 있어요.")
-                    .font(.app(.caption, .medium))
+                    .font(.app(.callout, .medium))
                     .foregroundColor(.appTextSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .appCard()
             }
         }
@@ -1007,67 +1046,80 @@ private struct TemplateManagementSheet: View {
     @State private var editorContext: EditorContext?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if templates.isEmpty {
-                        Text("주간 설정이 없어요. 추가하면 자동으로 스케줄이 생성돼요.")
-                            .font(.app(.caption, .medium))
-                            .foregroundColor(.appTextSecondary)
-                            .appCard()
-                    } else {
-                        VStack(spacing: 10) {
-                            ForEach(sortedWeekdays, id: \.self) { weekday in
-                                let dayTemplates = templates(for: weekday)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    ScheduleCloseButton { dismiss() }
+                    Spacer()
+                    Button(action: { editorContext = .create }) {
+                        Label("추가", systemImage: "plus")
+                            .labelStyle(AppButtonLabelStyle())
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.appOnInk)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(Color.appInk)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(PressableRowStyle())
+                    .disabled(workers.isEmpty)
+                    .opacity(workers.isEmpty ? 0.4 : 1.0)
+                }
 
-                                VStack(alignment: .leading, spacing: 10) {
-                                    HStack(spacing: 8) {
-                                        Text("\(weekdayLabel(weekday))요일")
-                                            .font(.app(.callout, .bold))
-                                            .foregroundColor(.appTextPrimary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("주간 설정")
+                        .font(.system(size: 26, weight: .heavy))
+                        .tracking(-0.6)
+                        .foregroundColor(.appTextPrimary)
+                    Text("요일마다 정해둔 근무가 스케줄에 자동으로 채워져요.")
+                        .font(.app(.callout))
+                        .foregroundColor(.appTextSecondary)
+                }
 
-                                        Text("\(dayTemplates.count)건")
-                                            .font(.app(.caption, .semibold))
-                                            .foregroundColor(.appAccent)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(Color.appAccent.opacity(0.12))
-                                            .cornerRadius(999)
+                if templates.isEmpty {
+                    Text("주간 설정이 없어요. 추가하면 자동으로 스케줄이 생성돼요.")
+                        .font(.app(.callout, .medium))
+                        .foregroundColor(.appTextSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .appCard()
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(sortedWeekdays, id: \.self) { weekday in
+                            let dayTemplates = templates(for: weekday)
 
-                                        Spacer()
-                                    }
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Text("\(weekdayLabel(weekday))요일")
+                                        .font(.system(size: 17, weight: .heavy))
+                                        .foregroundColor(.appTextPrimary)
 
-                                    VStack(spacing: 8) {
-                                        ForEach(dayTemplates) { template in
-                                            templateRow(template)
-                                        }
-                                    }
+                                    Text("\(dayTemplates.count)")
+                                        .font(.system(size: 17, weight: .heavy))
+                                        .foregroundColor(.appAccent)
+
+                                    Spacer()
                                 }
-                                .appCard()
+                                .padding(.bottom, 4)
+
+                                ForEach(Array(dayTemplates.enumerated()), id: \.element.id) { index, template in
+                                    if index > 0 {
+                                        Rectangle()
+                                            .fill(Color.appLine)
+                                            .frame(height: 1)
+                                    }
+                                    templateRow(template)
+                                }
                             }
+                            .appCard()
                         }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
             }
-            .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle("주간 설정")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("닫기") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("추가") {
-                        editorContext = .create
-                    }
-                    .disabled(workers.isEmpty)
-                }
-            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 24)
         }
+        .background(Color.appBackground.ignoresSafeArea())
         .sheet(item: $editorContext) { context in
             TemplateEditorSheet(
                 workers: workers,
@@ -1082,13 +1134,21 @@ private struct TemplateManagementSheet: View {
     }
 
     private func templateRow(_ template: ScheduleManagementView.WeeklyTemplateRow) -> some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(template.workers?.name ?? workerName(template.worker_id))
-                    .font(.app(.callout, .semibold))
+        let name = template.workers?.name ?? workerName(template.worker_id)
+        return HStack(spacing: 12) {
+            Text(String(name.prefix(1)))
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(.appLavender)
+                .frame(width: 40, height: 40)
+                .background(Color.appLavenderSoft)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.appTextPrimary)
                 Text(formatTimeRange(template.check_in_time, template.check_out_time))
-                    .font(.app(.caption, .medium))
+                    .font(.app(.caption))
                     .foregroundColor(.appTextSecondary)
             }
 
@@ -1103,11 +1163,12 @@ private struct TemplateManagementSheet: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.appTextSecondary)
-                    .padding(6)
+                    .frame(width: 32, height: 32)
             }
         }
-        .appInputField()
+        .padding(.vertical, 10)
     }
 
     private var sortedWeekdays: [Int] {
@@ -1151,26 +1212,34 @@ private struct TemplateEditorSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("요일")
-                            .font(.app(.callout, .semibold))
-                            .foregroundColor(.appTextPrimary)
+                VStack(alignment: .leading, spacing: 22) {
+                    ScheduleCloseButton { dismiss() }
 
-                        Picker("요일", selection: $weekday) {
-                            Text("일").tag(0)
-                            Text("월").tag(1)
-                            Text("화").tag(2)
-                            Text("수").tag(3)
-                            Text("목").tag(4)
-                            Text("금").tag(5)
-                            Text("토").tag(6)
+                    Text(initialTemplate == nil ? "주간 설정 추가" : "주간 설정 수정")
+                        .font(.system(size: 26, weight: .heavy))
+                        .tracking(-0.6)
+                        .foregroundColor(.appTextPrimary)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ScheduleFieldLabel(text: "요일")
+                        HStack(spacing: 6) {
+                            ForEach(Array(["일", "월", "화", "수", "목", "금", "토"].enumerated()), id: \.offset) { index, label in
+                                let isSelected = weekday == index
+                                Button(action: { weekday = index }) {
+                                    Text(label)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(isSelected ? .appOnInk : .appTextSecondary)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 40)
+                                        .background(isSelected ? Color.appInk : Color.appFill)
+                                        .clipShape(Circle())
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                        .pickerStyle(.segmented)
                     }
-                    .appCard()
 
                     timeInputSection
 
@@ -1179,104 +1248,95 @@ private struct TemplateEditorSheet: View {
                             .font(.app(.caption, .medium))
                             .foregroundColor(.appWarning)
                     }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 24)
+            }
+            .scrollDismissesKeyboard(.interactively)
 
-                    Button(action: save) {
-                        Text(initialTemplate == nil ? "템플릿 추가" : "템플릿 저장")
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(workers.isEmpty)
-                    .opacity(workers.isEmpty ? 0.5 : 1.0)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+            Button(action: save) {
+                Text(initialTemplate == nil ? "템플릿 추가" : "템플릿 저장")
             }
-            .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle(initialTemplate == nil ? "주간 설정 추가" : "주간 설정 수정")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("닫기") {
-                        dismiss()
-                    }
-                }
-            }
-            .task {
-                applyInitialValue()
-            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(workers.isEmpty)
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+            .background(Color.appSurface)
+        }
+        .background(Color.appSurface.ignoresSafeArea())
+        .task {
+            applyInitialValue()
         }
     }
 
     private var timeInputSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("시간")
-                .font(.app(.callout, .semibold))
-                .foregroundColor(.appTextPrimary)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("근무자")
-                    .font(.app(.caption, .medium))
-                    .foregroundColor(.appTextSecondary)
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 8) {
+                ScheduleFieldLabel(text: "근무자")
 
                 if workers.isEmpty {
                     Text("등록된 알바가 없어요. 먼저 알바관리에서 알바를 등록해주세요.")
-                        .font(.app(.caption, .medium))
+                        .font(.app(.callout))
                         .foregroundColor(.appTextSecondary)
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.appFill)
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
                 } else {
-                    Picker("근무자", selection: Binding(
-                        get: { workerId ?? workers.first?.id },
-                        set: { workerId = $0 }
-                    )) {
-                        ForEach(workers) { worker in
-                            Text(worker.name).tag(Optional(worker.id))
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(workers) { worker in
+                                ScheduleChip(
+                                    title: worker.name,
+                                    isSelected: (workerId ?? workers.first?.id) == worker.id
+                                ) {
+                                    workerId = worker.id
+                                }
+                            }
                         }
                     }
-                    .pickerStyle(.menu)
                 }
             }
 
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("출근 시간 (필수)")
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appTextSecondary)
-                    timeField(hour: $startHour, minute: $startMinute)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ScheduleFieldLabel(text: "출근")
+                        timeField(hour: $startHour, minute: $startMinute)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ScheduleFieldLabel(text: "퇴근 (선택)")
+                        timeField(hour: $endHour, minute: $endMinute)
+                    }
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("퇴근 시간 (선택)")
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appTextSecondary)
-                    timeField(hour: $endHour, minute: $endMinute)
-                }
+                Text("퇴근 시간은 비워둘 수 있어요.")
+                    .font(.app(.caption))
+                    .foregroundColor(.appTextSecondary)
             }
-
-            Text("퇴근 시간은 비워둘 수 있어요.")
-                .font(.app(.caption, .medium))
-                .foregroundColor(.appTextSecondary)
         }
-        .appCard()
     }
 
     private func timeField(hour: Binding<String>, minute: Binding<String>) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 2) {
             TextField("시", text: hour)
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.center)
-                .foregroundColor(.appTextPrimary)
-                .padding(10)
-                .background(Color.appFill)
-                .cornerRadius(10)
             Text(":")
-                .font(.app(.callout, .bold))
                 .foregroundColor(.appTextSecondary)
             TextField("분", text: minute)
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.center)
-                .foregroundColor(.appTextPrimary)
-                .padding(10)
-                .background(Color.appFill)
-                .cornerRadius(10)
         }
+        .font(.system(size: 20, weight: .bold))
+        .foregroundColor(.appTextPrimary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 14)
+        .background(Color.appFill)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
     }
 
     private func applyInitialValue() {
@@ -1377,18 +1437,20 @@ private struct ScheduleEntryEditorSheet: View {
     private let calendar = AppTime.calendar
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("근무 일자")
-                            .font(.app(.callout, .semibold))
+                VStack(alignment: .leading, spacing: 22) {
+                    ScheduleCloseButton { dismiss() }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(initialEntry == nil ? "근무 추가" : "근무 수정")
+                            .font(.system(size: 26, weight: .heavy))
+                            .tracking(-0.6)
                             .foregroundColor(.appTextPrimary)
                         Text(dayTitle)
-                            .font(.app(.body, .bold))
-                            .foregroundColor(.appTextPrimary)
+                            .font(.app(.callout, .medium))
+                            .foregroundColor(.appTextSecondary)
                     }
-                    .appCard()
 
                     timeInputSection
 
@@ -1397,30 +1459,26 @@ private struct ScheduleEntryEditorSheet: View {
                             .font(.app(.caption, .medium))
                             .foregroundColor(.appWarning)
                     }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 24)
+            }
+            .scrollDismissesKeyboard(.interactively)
 
-                    Button(action: save) {
-                        Text(initialEntry == nil ? "근무 추가" : "근무 저장")
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(workers.isEmpty)
-                    .opacity(workers.isEmpty ? 0.5 : 1.0)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+            Button(action: save) {
+                Text(initialEntry == nil ? "근무 추가" : "근무 저장")
             }
-            .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle(initialEntry == nil ? "근무 추가" : "근무 수정")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("닫기") {
-                        dismiss()
-                    }
-                }
-            }
-            .task {
-                applyInitialValue()
-            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(workers.isEmpty)
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+            .background(Color.appSurface)
+        }
+        .background(Color.appSurface.ignoresSafeArea())
+        .task {
+            applyInitialValue()
         }
     }
 
@@ -1430,76 +1488,71 @@ private struct ScheduleEntryEditorSheet: View {
     }
 
     private var timeInputSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("시간")
-                .font(.app(.callout, .semibold))
-                .foregroundColor(.appTextPrimary)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("근무자")
-                    .font(.app(.caption, .medium))
-                    .foregroundColor(.appTextSecondary)
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 8) {
+                ScheduleFieldLabel(text: "근무자")
 
                 if workers.isEmpty {
                     Text("등록된 알바가 없어요. 먼저 알바관리에서 알바를 등록해주세요.")
-                        .font(.app(.caption, .medium))
+                        .font(.app(.callout))
                         .foregroundColor(.appTextSecondary)
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.appFill)
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
                 } else {
-                    Picker("근무자", selection: Binding(
-                        get: { workerId ?? workers.first?.id },
-                        set: { workerId = $0 }
-                    )) {
-                        ForEach(workers) { worker in
-                            Text(worker.name).tag(Optional(worker.id))
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(workers) { worker in
+                                ScheduleChip(
+                                    title: worker.name,
+                                    isSelected: (workerId ?? workers.first?.id) == worker.id
+                                ) {
+                                    workerId = worker.id
+                                }
+                            }
                         }
                     }
-                    .pickerStyle(.menu)
                 }
             }
 
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("출근 시간 (필수)")
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appTextSecondary)
-                    timeField(hour: $startHour, minute: $startMinute)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ScheduleFieldLabel(text: "출근")
+                        timeField(hour: $startHour, minute: $startMinute)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ScheduleFieldLabel(text: "퇴근 (선택)")
+                        timeField(hour: $endHour, minute: $endMinute)
+                    }
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("퇴근 시간 (선택)")
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appTextSecondary)
-                    timeField(hour: $endHour, minute: $endMinute)
-                }
+                Text("퇴근 시간은 비워둘 수 있어요.")
+                    .font(.app(.caption))
+                    .foregroundColor(.appTextSecondary)
             }
-
-            Text("퇴근 시간은 비워둘 수 있어요.")
-                .font(.app(.caption, .medium))
-                .foregroundColor(.appTextSecondary)
         }
-        .appCard()
     }
 
     private func timeField(hour: Binding<String>, minute: Binding<String>) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 2) {
             TextField("시", text: hour)
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.center)
-                .foregroundColor(.appTextPrimary)
-                .padding(10)
-                .background(Color.appFill)
-                .cornerRadius(10)
             Text(":")
-                .font(.app(.callout, .bold))
                 .foregroundColor(.appTextSecondary)
             TextField("분", text: minute)
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.center)
-                .foregroundColor(.appTextPrimary)
-                .padding(10)
-                .background(Color.appFill)
-                .cornerRadius(10)
         }
+        .font(.system(size: 20, weight: .bold))
+        .foregroundColor(.appTextPrimary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 14)
+        .background(Color.appFill)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
     }
 
     private func applyInitialValue() {
@@ -1571,5 +1624,52 @@ private struct ScheduleEntryEditorSheet: View {
             return (false, nil)
         }
         return (true, built)
+    }
+}
+
+// 매장, 근무자 선택에 쓰는 알약 칩. 선택되면 검정으로 채운다.
+private struct ScheduleChip: View {
+    let title: String
+    let isSelected: Bool
+    var unselectedFill: Color = .appFill
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(isSelected ? .appOnInk : .appTextSecondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(isSelected ? Color.appInk : unselectedFill)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ScheduleCloseButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.appTextPrimary)
+                .frame(width: 40, height: 40)
+                .background(Color.appFill)
+                .clipShape(Circle())
+        }
+        .accessibilityLabel("닫기")
+    }
+}
+
+private struct ScheduleFieldLabel: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(.appTextSecondary)
     }
 }

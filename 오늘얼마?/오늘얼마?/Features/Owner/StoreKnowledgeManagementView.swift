@@ -65,16 +65,17 @@ struct StoreKnowledgeManagementView: View {
         HStack(spacing: 12) {
             Button(action: { dismiss() }) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.appTextPrimary)
-                    .frame(width: 38, height: 38)
+                    .frame(width: 40, height: 40)
                     .background(Color.appSurface)
                     .clipShape(Circle())
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("가게 관리")
-                    .font(.app(.largeTitle, .bold))
+                    .font(.system(size: 24, weight: .heavy))
+                    .tracking(-0.5)
                     .foregroundColor(.appTextPrimary)
                 Text(storeName)
                     .font(.app(.caption, .medium))
@@ -85,7 +86,14 @@ struct StoreKnowledgeManagementView: View {
             Spacer()
 
             if storageMode == .local {
-                StatusPill(text: "기기 저장", color: .appWarning)
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color.appCaution)
+                        .frame(width: 7, height: 7)
+                    Text("기기 저장")
+                        .font(.app(.caption, .semibold))
+                        .foregroundColor(.appCaution)
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -93,47 +101,62 @@ struct StoreKnowledgeManagementView: View {
     }
 
     private var panelPicker: some View {
-        Picker("", selection: $selectedPanel) {
-            ForEach(StoreKnowledgePanel.allCases) { panel in
-                Text(panel.title).tag(panel)
-            }
-        }
-        .pickerStyle(.segmented)
+        KnowledgeChipGroup(
+            options: StoreKnowledgePanel.allCases,
+            selection: $selectedPanel,
+            title: \.title
+        )
         .padding(.horizontal, 20)
     }
 
     private var documentsPanel: some View {
         VStack(spacing: 14) {
-            SectionHeader(title: "등록된 문서")
-                .padding(.horizontal, 20)
-
             HStack(spacing: 10) {
-                Button(action: { openEditor(kind: .notice) }) {
-                    Label("공지 등록", systemImage: "megaphone.fill")
+                ActionTile(
+                    title: "공지 등록",
+                    subtitle: "이번 주 변경 사항",
+                    systemImage: StoreDocumentKind.notice.icon,
+                    tint: StoreDocumentKind.notice.color,
+                    fill: StoreDocumentKind.notice.softColor
+                ) {
+                    openEditor(kind: .notice)
                 }
-                .buttonStyle(PrimaryButtonStyle(backgroundColor: .appPositive))
 
-                Button(action: { openEditor(kind: .manual) }) {
-                    Label("매뉴얼 추가", systemImage: "book.closed.fill")
+                ActionTile(
+                    title: "매뉴얼 추가",
+                    subtitle: "오픈·마감 순서",
+                    systemImage: StoreDocumentKind.manual.icon,
+                    tint: StoreDocumentKind.manual.color,
+                    fill: StoreDocumentKind.manual.softColor
+                ) {
+                    openEditor(kind: .manual)
                 }
-                .buttonStyle(SecondaryButtonStyle())
             }
             .padding(.horizontal, 20)
 
-            Picker("", selection: $selectedFilter) {
-                ForEach(StoreDocumentFilter.allCases) { filter in
-                    Text(filter.title).tag(filter)
-                }
+            HStack(alignment: .center) {
+                Text("등록된 문서")
+                    .font(.system(size: 19, weight: .heavy))
+                    .tracking(-0.4)
+                    .foregroundColor(.appTextPrimary)
+                Spacer()
+                KnowledgeChipGroup(
+                    options: StoreDocumentFilter.allCases,
+                    selection: $selectedFilter,
+                    title: \.title,
+                    compact: true
+                )
+                .fixedSize()
             }
-            .pickerStyle(.segmented)
             .padding(.horizontal, 20)
+            .padding(.top, 6)
 
             if let loadMessage {
                 Text(loadMessage)
                     .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 24)
             }
 
             if isLoading && documents.isEmpty {
@@ -149,11 +172,20 @@ struct StoreKnowledgeManagementView: View {
                     .appCard()
                     .padding(.horizontal, 20)
             } else {
-                VStack(spacing: 10) {
-                    ForEach(filteredDocuments) { document in
+                VStack(spacing: 0) {
+                    ForEach(Array(filteredDocuments.enumerated()), id: \.element.id) { index, document in
+                        if index > 0 {
+                            Rectangle()
+                                .fill(Color.appLine)
+                                .frame(height: 1)
+                        }
                         documentRow(document)
                     }
                 }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 4)
+                .background(Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                 .padding(.horizontal, 20)
             }
         }
@@ -192,17 +224,12 @@ struct StoreKnowledgeManagementView: View {
                 }
             }
 
-            Divider()
-                .background(Color.appLine)
-
-            HStack(spacing: 10) {
+            HStack(alignment: .bottom, spacing: 8) {
                 TextField("메시지 입력", text: $chatInput, axis: .vertical)
                     .font(.app(.callout, .medium))
                     .lineLimit(1...4)
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 16)
                     .padding(.vertical, 12)
-                    .background(Color.appSurface)
-                    .cornerRadius(16)
                     .onSubmit { Task { await askQuestion() } }
 
                 Button(action: { Task { await askQuestion() } }) {
@@ -210,21 +237,24 @@ struct StoreKnowledgeManagementView: View {
                         if isAsking {
                             ProgressView()
                                 .controlSize(.small)
-                                .tint(.white)
+                                .tint(.appOnInk)
                         } else {
                             Image(systemName: "arrow.up")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.appOnInk)
                         }
                     }
-                    .frame(width: 42, height: 42)
-                    .background(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.appLine : Color.appAccent)
+                    .frame(width: 36, height: 36)
+                    .background(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.appTextSecondary.opacity(0.35) : Color.appInk)
                     .clipShape(Circle())
                 }
                 .disabled(isAsking || chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .padding(4)
             }
+            .background(Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .padding(.horizontal, 16)
-            .padding(.top, 10)
+            .padding(.top, 8)
             .padding(.bottom, 12)
             .background(Color.appBackground)
         }
@@ -236,16 +266,17 @@ struct StoreKnowledgeManagementView: View {
             Image("wallet_mascot")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 108, height: 108)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .frame(width: 96, height: 96)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
 
-            VStack(spacing: 7) {
+            VStack(spacing: 6) {
                 Text("오늘얼마 매뉴얼 챗봇")
-                    .font(.app(.headline, .bold))
+                    .font(.system(size: 20, weight: .heavy))
+                    .tracking(-0.4)
                     .foregroundColor(.appTextPrimary)
 
                 Text("등록한 공지와 매뉴얼을 기준으로\n직원 질문에 바로 답변해요.")
-                    .font(.app(.caption, .medium))
+                    .font(.app(.callout))
                     .foregroundColor(.appTextSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
@@ -256,60 +287,178 @@ struct StoreKnowledgeManagementView: View {
         .padding(.horizontal, 24)
     }
 
+    private var canSaveDraft: Bool {
+        !isSaving
+            && !draftTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !draftContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // 문서 추가/수정: 흰 전체 화면, 종류 타일, 밑줄 제목, 회색 본문, 하단 고정 버튼.
     private var editorSheet: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Picker("", selection: $draftKind) {
-                        ForEach(StoreDocumentKind.allCases) { kind in
-                            Text(kind.title).tag(kind)
+                VStack(alignment: .leading, spacing: 22) {
+                    HStack {
+                        Button(action: { isPresentingEditor = false }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.appTextPrimary)
+                                .frame(width: 40, height: 40)
+                                .background(Color.appFill)
+                                .clipShape(Circle())
+                        }
+                        .accessibilityLabel("닫기")
+
+                        Spacer()
+
+                        if storageMode == .local {
+                            Text("이 기기에 저장돼요")
+                                .font(.app(.callout, .semibold))
+                                .foregroundColor(.appTextSecondary)
                         }
                     }
-                    .pickerStyle(.segmented)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(editingDocument == nil ? "어떤 문서를 올릴까요?" : "문서를 수정할게요")
+                            .font(.system(size: 26, weight: .heavy))
+                            .tracking(-0.6)
+                            .foregroundColor(.appTextPrimary)
+                        Text("올려두면 직원이 물어볼 때 챗봇이 이 문서를 보고 답해요.")
+                            .font(.app(.callout))
+                            .foregroundColor(.appTextSecondary)
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    HStack(spacing: 10) {
+                        ForEach(StoreDocumentKind.allCases) { kind in
+                            kindTile(kind)
+                        }
+                    }
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("제목")
-                            .font(.app(.caption, .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.appTextSecondary)
                         TextField("예: 포스기 마감 방법", text: $draftTitle)
-                            .font(.app(.body, .medium))
-                            .padding(14)
-                            .background(Color.appFill)
-                            .cornerRadius(12)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.appTextPrimary)
+                            .padding(.top, 6)
+                            .padding(.bottom, 10)
+                            .overlay(alignment: .bottom) {
+                                Rectangle()
+                                    .fill(Color.appInk)
+                                    .frame(height: 2)
+                            }
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("내용")
-                            .font(.app(.caption, .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.appTextSecondary)
                         TextEditor(text: $draftContent)
-                            .font(.app(.callout, .medium))
-                            .frame(minHeight: 260)
-                            .padding(10)
+                            .font(.system(size: 16))
+                            .lineSpacing(5)
+                            .foregroundColor(.appTextPrimary)
                             .scrollContentBackground(.hidden)
+                            .frame(minHeight: 220)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .overlay(alignment: .topLeading) {
+                                if draftContent.isEmpty {
+                                    Text("예: 1. 22시에 주문 마감\n2. 커피머신 세척 후 전원 끄기")
+                                        .font(.system(size: 16))
+                                        .lineSpacing(5)
+                                        .foregroundColor(.appTextSecondary.opacity(0.6))
+                                        .padding(.horizontal, 17)
+                                        .padding(.vertical, 18)
+                                        .allowsHitTesting(false)
+                                }
+                            }
                             .background(Color.appFill)
-                            .cornerRadius(12)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                        Button(action: { draftIsPinned.toggle() }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: draftIsPinned ? "pin.fill" : "pin")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text("상단 고정")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(draftIsPinned ? .appOnInk : .appTextPrimary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(draftIsPinned ? Color.appInk : Color.appFill)
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(PressableRowStyle())
                     }
+
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "sparkle")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.appAccent)
+                            .padding(.top, 1)
+                        Text("직원이 \"마감은 몇 시에 해요?\"라고 물으면 **이 문서를 근거로** 답해요.")
+                            .font(.system(size: 13))
+                            .foregroundColor(.appTextSecondary)
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.appBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
-                .padding(20)
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 24)
             }
-            .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle(editingDocument == nil ? "문서 추가" : "문서 수정")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("취소") {
-                        isPresentingEditor = false
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "저장 중" : "저장") {
-                        Task { await saveDraft() }
-                    }
-                    .disabled(isSaving || draftTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draftContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
+            .scrollDismissesKeyboard(.interactively)
+
+            Button(action: { Task { await saveDraft() } }) {
+                Text(isSaving ? "저장 중" : (editingDocument == nil ? "등록하기" : "저장하기"))
             }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(!canSaveDraft)
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+            .background(Color.appSurface)
         }
+        .background(Color.appSurface.ignoresSafeArea())
+    }
+
+    private func kindTile(_ kind: StoreDocumentKind) -> some View {
+        let isSelected = draftKind == kind
+        return Button(action: { draftKind = kind }) {
+            HStack(spacing: 10) {
+                Image(systemName: kind.icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(isSelected ? .appAccent : .appTextSecondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(kind.title)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.appTextPrimary)
+                    Text(kind.subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(.appTextSecondary)
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity)
+            .background(isSelected ? Color.appAccentSoft : Color.appFill)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(isSelected ? Color.appAccent : Color.clear, lineWidth: 2)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(PressableRowStyle())
     }
 
     private var filteredDocuments: [StoreDocumentRow] {
@@ -331,31 +480,27 @@ struct StoreKnowledgeManagementView: View {
         Button(action: { viewingDocument = document }) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: document.kind.icon)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(document.kind.color)
-                    .frame(width: 34, height: 34)
-                    .background(document.kind.color.opacity(0.12))
-                    .clipShape(Circle())
+                    .frame(width: 40, height: 40)
+                    .background(document.kind.softColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 6) {
-                        Text(document.kind.title)
-                            .font(.app(.caption, .bold))
-                            .foregroundColor(document.kind.color)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(document.kind.color.opacity(0.1))
-                            .cornerRadius(10)
-
-                        Spacer()
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Text(document.title)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.appTextPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .lineLimit(1)
 
                         Button {
                             Task { await togglePinned(document) }
                         } label: {
                             Image(systemName: document.isPinned ? "pin.fill" : "pin")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(document.isPinned ? .appAccent : .appTextSecondary)
-                                .frame(width: 30, height: 26)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(document.isPinned ? .appAccent : .appTextSecondary.opacity(0.7))
+                                .frame(width: 28, height: 24)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -375,23 +520,90 @@ struct StoreKnowledgeManagementView: View {
                             }
                         } label: {
                             Image(systemName: "ellipsis")
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.appTextSecondary)
-                                .frame(width: 30, height: 26)
+                                .frame(width: 28, height: 24)
+                        }
+                    }
+
+                    Text(document.content.normalizedPreview(limit: 86))
+                        .font(.app(.caption))
+                        .foregroundColor(.appTextSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .lineLimit(2)
+
+                    if let dateText = formattedDate(document.updatedAt ?? document.createdAt) {
+                        Text(dateText)
+                            .font(.system(size: 12))
+                            .foregroundColor(.appTextSecondary.opacity(0.8))
+                            .padding(.top, 2)
+                    }
+                }
+            }
+            .padding(.vertical, 14)
+        }
+        .buttonStyle(PressableRowStyle())
+    }
+
+    private func documentDetailSheet(_ document: StoreDocumentRow) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack {
+                    Button(action: { viewingDocument = nil }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.appTextPrimary)
+                            .frame(width: 40, height: 40)
+                            .background(Color.appFill)
+                            .clipShape(Circle())
+                    }
+                    .accessibilityLabel("닫기")
+
+                    Spacer()
+
+                    Button(action: {
+                        viewingDocument = nil
+                        openEditor(document)
+                    }) {
+                        Label("수정", systemImage: "pencil")
+                            .labelStyle(AppButtonLabelStyle())
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.appTextPrimary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(Color.appFill)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(PressableRowStyle())
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(document.kind.color)
+                                .frame(width: 7, height: 7)
+                            Text(document.kind.title)
+                                .font(.app(.caption, .semibold))
+                                .foregroundColor(document.kind.color)
+                        }
+
+                        if document.isPinned {
+                            HStack(spacing: 4) {
+                                Image(systemName: "pin.fill")
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text("상단 고정")
+                                    .font(.app(.caption, .semibold))
+                            }
+                            .foregroundColor(.appTextSecondary)
                         }
                     }
 
                     Text(document.title)
-                        .font(.app(.body, .semibold))
+                        .font(.system(size: 26, weight: .heavy))
+                        .tracking(-0.6)
                         .foregroundColor(.appTextPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .lineLimit(1)
-
-                    Text(document.content.normalizedPreview(limit: 86))
-                        .font(.app(.caption, .medium))
-                        .foregroundColor(.appTextSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     if let dateText = formattedDate(document.updatedAt ?? document.createdAt) {
                         Text(dateText)
@@ -399,78 +611,23 @@ struct StoreKnowledgeManagementView: View {
                             .foregroundColor(.appTextSecondary)
                     }
                 }
+
+                Text(document.content)
+                    .font(.system(size: 16))
+                    .foregroundColor(.appTextPrimary)
+                    .lineSpacing(7)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(18)
+                    .background(Color.appFill)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
-            .padding(16)
-            .background(Color.appSurface)
-            .cornerRadius(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 32)
         }
-        .buttonStyle(.plain)
-    }
-
-    private func documentDetailSheet(_ document: StoreDocumentRow) -> some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    HStack(spacing: 8) {
-                        Label(document.kind.title, systemImage: document.kind.icon)
-                            .font(.app(.caption, .bold))
-                            .foregroundColor(document.kind.color)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(document.kind.color.opacity(0.1))
-                            .cornerRadius(10)
-
-                        if document.isPinned {
-                            Label("상단 고정", systemImage: "pin.fill")
-                                .font(.app(.caption, .bold))
-                                .foregroundColor(.appAccent)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.appAccent.opacity(0.1))
-                                .cornerRadius(10)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(document.title)
-                            .font(.app(.title, .bold))
-                            .foregroundColor(.appTextPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        if let dateText = formattedDate(document.updatedAt ?? document.createdAt) {
-                            Text(dateText)
-                                .font(.app(.caption, .medium))
-                                .foregroundColor(.appTextSecondary)
-                        }
-                    }
-
-                    Text(document.content)
-                        .font(.app(.callout, .medium))
-                        .foregroundColor(.appTextPrimary)
-                        .lineSpacing(6)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(20)
-            }
-            .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle("문서 보기")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("닫기") {
-                        viewingDocument = nil
-                    }
-                }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("수정") {
-                        viewingDocument = nil
-                        openEditor(document)
-                    }
-                }
-            }
-        }
+        .background(Color.appSurface.ignoresSafeArea())
     }
 
     private func chatBubble(_ message: StoreKnowledgeChatMessage) -> some View {
@@ -481,17 +638,13 @@ struct StoreKnowledgeManagementView: View {
 
             Text(message.content)
                 .font(.app(.callout, .medium))
-                .foregroundColor(message.role == .user ? .white : .appTextPrimary)
+                .foregroundColor(message.role == .user ? .appOnInk : .appTextPrimary)
                 .lineSpacing(3)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
-                .background(message.role == .user ? Color.appAccent : Color.appSurface)
+                .background(message.role == .user ? Color.appInk : Color.appSurface)
                 .clipShape(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(message.role == .user ? Color.clear : Color.appLine, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
                 )
                 .frame(maxWidth: 280, alignment: message.role == .user ? .trailing : .leading)
 
@@ -518,7 +671,7 @@ struct StoreKnowledgeManagementView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 13)
                 .background(Color.appSurface)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
             Spacer(minLength: 54)
         }
@@ -882,11 +1035,64 @@ private enum StoreDocumentKind: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    var subtitle: String {
+        switch self {
+        case .manual: return "오픈·마감 순서, 레시피"
+        case .notice: return "이번 주 변경 사항"
+        }
+    }
+
     var color: Color {
         switch self {
         case .manual: return .appAccent
-        case .notice: return .appPositive
+        case .notice: return .appLavender
         }
+    }
+
+    var softColor: Color {
+        switch self {
+        case .manual: return .appAccentSoft
+        case .notice: return .appLavenderSoft
+        }
+    }
+}
+
+// 세그먼트 대신 쓰는 알약 칩 묶음. 선택된 칩만 검정으로 채운다.
+private struct KnowledgeChipGroup<Option: Hashable & Identifiable>: View {
+    let options: [Option]
+    @Binding var selection: Option
+    let title: (Option) -> String
+    var compact = false
+
+    init(options: [Option], selection: Binding<Option>, title: KeyPath<Option, String>, compact: Bool = false) {
+        self.options = options
+        self._selection = selection
+        self.title = { $0[keyPath: title] }
+        self.compact = compact
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(options) { option in
+                let isSelected = option == selection
+                Button(action: {
+                    withAnimation(.easeOut(duration: 0.15)) { selection = option }
+                }) {
+                    Text(title(option))
+                        .font(.system(size: compact ? 13 : 14, weight: .semibold))
+                        .foregroundColor(isSelected ? .appOnInk : .appTextSecondary)
+                        .padding(.horizontal, compact ? 12 : 0)
+                        .frame(maxWidth: compact ? nil : .infinity)
+                        .padding(.vertical, compact ? 7 : 9)
+                        .background(isSelected ? Color.appInk : Color.clear)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(compact ? Color.appFill : Color.appSurface)
+        .clipShape(Capsule())
     }
 }
 

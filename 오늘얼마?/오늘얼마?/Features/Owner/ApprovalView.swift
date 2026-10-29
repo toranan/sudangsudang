@@ -40,43 +40,72 @@ struct ApprovalView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("근무 승인")
+                        .font(.system(size: 26, weight: .heavy))
+                        .tracking(-0.6)
+                        .foregroundColor(.appTextPrimary)
+                    Text(pending.isEmpty ? "확인할 근무가 없어요" : "승인 기다리는 근무 \(pending.count)건")
+                        .font(.app(.callout, .medium))
+                        .foregroundColor(.appTextSecondary)
+                }
+                .padding(.horizontal, 4)
+                .padding(.top, 8)
+
                 if !stores.isEmpty {
                     storePicker
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    SectionHeader(title: "대기 중")
+                    sectionTitle("대기 중", count: pending.count)
                     if isLoading && pending.isEmpty && recent.isEmpty {
                         ProgressView()
                             .frame(maxWidth: .infinity, alignment: .center)
                             .appCard()
                     } else if pending.isEmpty {
                         Text("대기 중인 요청이 없어요.")
-                            .font(.app(.caption, .medium))
+                            .font(.app(.callout, .medium))
                             .foregroundColor(.appTextSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .appCard()
                     } else {
-                        VStack(spacing: 12) {
+                        VStack(spacing: 10) {
                             ForEach(pending) { item in
-                                VStack(alignment: .leading, spacing: 10) {
-                                    HStack {
-                                        Text(workerDisplayName(item))
-                                            .font(.app(.body, .bold))
-                                            .foregroundColor(.appTextPrimary)
-                                        Spacer()
-                                        Text(formatRange(item))
-                                            .font(.app(.caption, .medium))
-                                            .foregroundColor(.appTextSecondary)
+                                VStack(alignment: .leading, spacing: 14) {
+                                    HStack(spacing: 12) {
+                                        workerAvatar(item)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(workerDisplayName(item))
+                                                .font(.system(size: 16, weight: .bold))
+                                                .foregroundColor(.appTextPrimary)
+                                            Text(formatRange(item))
+                                                .font(.app(.caption))
+                                                .foregroundColor(.appTextSecondary)
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.85)
+                                        }
+                                        Spacer(minLength: 8)
+                                        statusDot(
+                                            hasCheckout(item) ? "승인 대기" : "근무 중",
+                                            color: hasCheckout(item) ? .appCaution : .appAccent
+                                        )
                                     }
-                                    Text(formatDetail(item))
-                                        .font(.app(.callout, .medium))
-                                        .foregroundColor(.appTextPrimary)
 
-                                    HStack(spacing: 10) {
+                                    Text(formatDetail(item))
+                                        .font(.app(.callout, .semibold))
+                                        .foregroundColor(.appTextPrimary)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 11)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color.appFill)
+                                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.field, style: .continuous))
+
+                                    HStack(spacing: 8) {
                                         Button(action: {
                                             Task { await updateStatus(item, status: "rejected") }
                                         }) { Text("반려") }
                                         .buttonStyle(SecondaryButtonStyle(foregroundColor: .appWarning))
+                                        .frame(maxWidth: 120)
                                         Button(action: {
                                             Task { await updateStatus(item, status: "approved") }
                                         }) { Text("승인") }
@@ -87,7 +116,7 @@ struct ApprovalView: View {
                                     if !hasCheckout(item) {
                                         Text("퇴근 처리 후 승인할 수 있어요.")
                                             .font(.app(.caption, .medium))
-                                            .foregroundColor(.appWarning)
+                                            .foregroundColor(.appTextSecondary)
                                     }
                                 }
                                 .appCard()
@@ -97,36 +126,49 @@ struct ApprovalView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    SectionHeader(title: "최근 승인/반려")
+                    sectionTitle("최근 승인/반려", count: nil)
                     if recent.isEmpty {
                         Text("최근 내역이 없어요.")
-                            .font(.app(.caption, .medium))
+                            .font(.app(.callout, .medium))
                             .foregroundColor(.appTextSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .appCard()
                     } else {
-                        VStack(spacing: 10) {
-                            ForEach(recent) { item in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack {
-                                        Text(workerDisplayName(item))
-                                            .font(.app(.callout, .semibold))
-                                            .foregroundColor(.appTextPrimary)
-                                        Spacer()
-                                        StatusPill(
-                                            text: normalizedStatus(item.status) == "approved" ? "승인" : "반려",
-                                            color: normalizedStatus(item.status) == "approved" ? .appPositive : .appWarning
-                                        )
-                                    }
-                                    Text(formatRange(item))
-                                        .font(.app(.caption, .medium))
-                                        .foregroundColor(.appTextSecondary)
-                                    Text(formatDetail(item))
-                                        .font(.app(.caption, .medium))
-                                        .foregroundColor(.appTextSecondary)
+                        VStack(spacing: 0) {
+                            ForEach(Array(recent.enumerated()), id: \.element.id) { index, item in
+                                if index > 0 {
+                                    Rectangle()
+                                        .fill(Color.appLine)
+                                        .frame(height: 1)
                                 }
-                                .appInputField()
+                                HStack(spacing: 12) {
+                                    workerAvatar(item)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(workerDisplayName(item))
+                                            .font(.system(size: 16, weight: .bold))
+                                            .foregroundColor(.appTextPrimary)
+                                        Text(formatRange(item))
+                                            .font(.app(.caption))
+                                            .foregroundColor(.appTextSecondary)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.85)
+                                        Text(formatDetail(item))
+                                            .font(.app(.caption))
+                                            .foregroundColor(.appTextSecondary)
+                                    }
+                                    Spacer(minLength: 8)
+                                    statusDot(
+                                        normalizedStatus(item.status) == "approved" ? "승인" : "반려",
+                                        color: normalizedStatus(item.status) == "approved" ? .appAccent : .appWarning
+                                    )
+                                }
+                                .padding(.vertical, 12)
                             }
                         }
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 4)
+                        .background(Color.appSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                     }
                 }
 
@@ -136,7 +178,7 @@ struct ApprovalView: View {
                         .foregroundColor(.appWarning)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
         .appRefreshable {
@@ -156,23 +198,59 @@ struct ApprovalView: View {
         }
     }
 
+    private func sectionTitle(_ title: String, count: Int?) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.system(size: 19, weight: .heavy))
+                .tracking(-0.4)
+                .foregroundColor(.appTextPrimary)
+            if let count, count > 0 {
+                Text("\(count)")
+                    .font(.system(size: 19, weight: .heavy))
+                    .foregroundColor(.appAccent)
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private func workerAvatar(_ item: LogRow) -> some View {
+        Text(String(workerDisplayName(item).prefix(1)))
+            .font(.system(size: 15, weight: .bold))
+            .foregroundColor(.appAccent)
+            .frame(width: 40, height: 40)
+            .background(Color.appAccentSoft)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func statusDot(_ text: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+            Text(text)
+                .font(.app(.caption, .semibold))
+                .foregroundColor(color)
+        }
+    }
+
     private var storePicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(stores) { store in
                     let isSelected = store.id == selectedStoreId
                     Button(action: { selectedStoreId = store.id }) {
                         Text(store.name)
-                            .font(.app(.caption, .semibold))
-                            .foregroundColor(isSelected ? .white : .appTextPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(isSelected ? Color.appAccent : Color.appSurface)
-                            .cornerRadius(999)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(isSelected ? .appOnInk : .appTextSecondary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .background(isSelected ? Color.appInk : Color.appSurface)
+                            .clipShape(Capsule())
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
         }
     }
 

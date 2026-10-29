@@ -11,20 +11,20 @@ import KakaoSDKUser
 
 struct AuthBrandView: View {
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 28) {
             Image("wallet_mascot")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 160, height: 160)
-                .padding(.bottom, 20)
+                .frame(width: 136, height: 136)
 
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 Text("사장님, 알바생 모두")
-                    .font(.app(.headline, .semibold))
-                    .foregroundColor(.appTextSecondary)
+                    .font(.app(.callout, .semibold))
+                    .foregroundColor(.appAccent)
 
                 Text("간편하게 수당수당")
-                    .font(.app(.largeTitle, .bold))
+                    .font(.system(size: 30, weight: .heavy))
+                    .tracking(-0.8)
                     .foregroundColor(.appTextPrimary)
             }
             .multilineTextAlignment(.center)
@@ -80,56 +80,37 @@ struct AuthView: View {
     }
 
     private var roleStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("어떤 회원으로 가입하시겠어요?")
-                .font(.app(.headline, .bold))
+                .font(.system(size: 20, weight: .heavy))
+                .tracking(-0.4)
                 .foregroundColor(.appTextPrimary)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.bottom, 10)
+                .padding(.bottom, 8)
 
             Button(action: {
                 Task { await completeSignup(selectedRole: .owner) }
             }) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("사장님이에요")
-                            .font(.app(.body, .bold))
-                            .foregroundColor(.appTextPrimary)
-                        Text("매장 관리와 근무 승인을 해요")
-                            .font(.app(.caption, .medium))
-                            .foregroundColor(.appTextSecondary)
-                    }
-                    Spacer()
-                    Image(systemName: "storefront.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.blue.opacity(0.8))
-                }
-                .padding(20)
-                .background(Color.appSurface)
-                .cornerRadius(20)
+                roleCard(
+                    title: "사장님이에요",
+                    subtitle: "매장 관리와 근무 승인을 해요",
+                    systemImage: "storefront.fill",
+                    tint: .appAccent,
+                    fill: .appAccentSoft
+                )
             }
             .buttonStyle(ScaleButtonStyle())
 
             Button(action: {
                 Task { await completeSignup(selectedRole: .worker) }
             }) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("아르바이트생이에요")
-                            .font(.app(.body, .bold))
-                            .foregroundColor(.appTextPrimary)
-                        Text("출퇴근 기록과 급여를 확인해요")
-                            .font(.app(.caption, .medium))
-                            .foregroundColor(.appTextSecondary)
-                    }
-                    Spacer()
-                    Image(systemName: "person.text.rectangle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.green.opacity(0.8))
-                }
-                .padding(20)
-                .background(Color.appSurface)
-                .cornerRadius(20)
+                roleCard(
+                    title: "아르바이트생이에요",
+                    subtitle: "출퇴근 기록과 급여를 확인해요",
+                    systemImage: "person.text.rectangle.fill",
+                    tint: .appLavender,
+                    fill: .appLavenderSoft
+                )
             }
             .buttonStyle(ScaleButtonStyle())
 
@@ -137,13 +118,44 @@ struct AuthView: View {
                 step = .apple
             }) {
                 Text("이전으로")
-                    .font(.app(.callout, .medium))
+                    .font(.app(.callout, .semibold))
                     .foregroundColor(.appTextSecondary)
-                    .padding(.top, 10)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 12)
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, 20)
         .padding(.bottom, 40)
+    }
+
+    private func roleCard(title: String, subtitle: String, systemImage: String, tint: Color, fill: Color) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(tint)
+                .frame(width: 44, height: 44)
+                .background(fill)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.appTextPrimary)
+                Text(subtitle)
+                    .font(.app(.caption))
+                    .foregroundColor(.appTextSecondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.appTextSecondary.opacity(0.6))
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .background(Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
     }
 
     private var appleStep: some View {
@@ -157,15 +169,15 @@ struct AuthView: View {
             }) {
                 HStack(spacing: 8) {
                     Image(systemName: "message.fill")
-                        .font(.system(size: 18))
+                        .font(.system(size: 15, weight: .semibold))
                     Text("카카오톡으로 시작하기")
-                        .font(.app(.body, .semibold))
+                        .font(.app(.body, .bold))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)
                 .background(Color(red: 254/255, green: 229/255, blue: 0/255))
                 .foregroundColor(.black.opacity(0.85))
-                .cornerRadius(16)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
             }
             .buttonStyle(ScaleButtonStyle())
 
@@ -203,8 +215,8 @@ struct AuthView: View {
                 }
             })
             .signInWithAppleButtonStyle(.black)
-            .frame(height: 52)
-            .cornerRadius(12)
+            .frame(height: 54)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)

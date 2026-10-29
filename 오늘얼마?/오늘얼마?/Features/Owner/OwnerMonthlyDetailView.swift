@@ -39,8 +39,15 @@ struct OwnerMonthlyDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                SectionHeader(title: "이번 달 알바별")
+            VStack(alignment: .leading, spacing: 18) {
+                summaryCard
+
+                Text("알바별")
+                    .font(.system(size: 19, weight: .heavy))
+                    .tracking(-0.4)
+                    .foregroundColor(.appTextPrimary)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 4)
 
                 if isLoading && workers.isEmpty {
                     ProgressView()
@@ -48,20 +55,30 @@ struct OwnerMonthlyDetailView: View {
                         .appCard()
                 } else if workers.isEmpty {
                     Text("등록된 알바가 없어요.")
-                        .font(.app(.caption, .medium))
+                        .font(.app(.callout, .medium))
                         .foregroundColor(.appTextSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .appCard()
                 } else {
-                    VStack(spacing: 10) {
-                        ForEach(workers) { worker in
+                    VStack(spacing: 0) {
+                        ForEach(Array(workers.enumerated()), id: \.element.id) { index, worker in
+                            if index > 0 {
+                                Rectangle()
+                                    .fill(Color.appLine)
+                                    .frame(height: 1)
+                            }
                             NavigationLink {
                                 OwnerWorkerLogsView(storeId: storeId, workerId: worker.id, workerName: worker.name)
                             } label: {
                                 workerRow(worker)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(PressableRowStyle())
                         }
                     }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 4)
+                    .background(Color.appSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                 }
 
                 if let loadError {
@@ -70,7 +87,7 @@ struct OwnerMonthlyDetailView: View {
                         .foregroundColor(.appWarning)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
         .appRefreshable {
@@ -84,35 +101,58 @@ struct OwnerMonthlyDetailView: View {
         }
     }
 
+    // 승인된 근무만 합산한 이번 달 합계.
+    private var summaryCard: some View {
+        let totalPay = totalsByWorker.values.reduce(0) { $0 + $1.pay }
+        let totalMinutes = totalsByWorker.values.reduce(0) { $0 + $1.minutes }
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("이번 달 승인된 인건비")
+                .font(.app(.callout, .medium))
+                .foregroundColor(.appTextSecondary)
+            Text(formatWon(totalPay))
+                .font(.system(size: 34, weight: .heavy))
+                .tracking(-1)
+                .foregroundColor(.appTextPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text("총 \(formatHours(totalMinutes)) · 알바 \(workers.count)명")
+                .font(.app(.caption, .medium))
+                .foregroundColor(.appTextSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
+    }
+
     private func workerRow(_ worker: WorkerRow) -> some View {
         let totals = totalsByWorker[worker.id] ?? Totals(minutes: 0, pay: 0)
         return HStack(alignment: .center, spacing: 12) {
-            Circle()
-                .fill(Color.appAccent.opacity(0.12))
+            Text(String(worker.name.prefix(1)))
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(.appAccent)
                 .frame(width: 40, height: 40)
-                .overlay(
-                    Text(String(worker.name.prefix(1)))
-                        .font(.app(.body, .bold))
-                        .foregroundColor(.appAccent)
-                )
+                .background(Color.appAccentSoft)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(worker.name)
-                    .font(.app(.callout, .semibold))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.appTextPrimary)
-                Text("총 \(formatHours(totals.minutes)) · \(formatWon(totals.pay))")
-                    .font(.app(.caption, .medium))
+                Text("총 \(formatHours(totals.minutes))")
+                    .font(.app(.caption))
                     .foregroundColor(.appTextSecondary)
             }
 
             Spacer()
 
+            Text(formatWon(totals.pay))
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(.appTextPrimary)
+
             Image(systemName: "chevron.right")
-                .foregroundColor(.appLine)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.appTextSecondary.opacity(0.6))
         }
-        .padding(14)
-        .background(Color.appSurface)
-        .cornerRadius(16)
+        .padding(.vertical, 12)
     }
 
     @MainActor
