@@ -1303,6 +1303,7 @@ struct WorkerDetailSheet: View {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(Color.appLine, lineWidth: 1)
                     )
+                MinimumWageHint(input: wageInput)
             }
 
             VStack(alignment: .leading, spacing: 10) {

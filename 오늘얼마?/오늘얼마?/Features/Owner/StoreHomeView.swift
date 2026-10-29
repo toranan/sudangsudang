@@ -1010,6 +1010,7 @@ struct CreateWorkerView: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .stroke(Color.appLine, lineWidth: 1)
                         )
+                    MinimumWageHint(input: wage)
                 }
 
                 Button(action: {

@@ -4,8 +4,10 @@ import Supabase
 #endif
 
 struct AppConfig {
-    // 2026년 최저시급 기준. 신규 알바 등록 시 기본값으로 사용.
-    static let defaultHourlyWage: Double = 10_320
+    // 2026년 최저시급. 시급 입력 시 미달 안내 기준.
+    static let minimumHourlyWage: Double = 10_320
+    // 신규 알바 등록 시 기본값으로 사용.
+    static let defaultHourlyWage: Double = minimumHourlyWage
 
     static let supabaseUrl = "https://epfcaibrywkberynrvbk.supabase.co"
     static let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwZmNhaWJyeXdrYmVyeW5ydmJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwNDg4MTMsImV4cCI6MjA4NTYyNDgxM30.E5YhJNMLsggJJ3CuH2Es0V2QfOoUPVFm7J3H2GB9FuQ"

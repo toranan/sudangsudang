@@ -691,15 +691,6 @@ struct WorkerHomeView: View {
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundColor(.appTextSecondary)
             }
-            HStack {
-                Text("예상 환급금")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundColor(.appTextSecondary)
-                Spacer()
-                Text(totalRefundEstimateText)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundColor(.appTextSecondary)
-            }
         }
         .padding(16)
         .background(Color.appSurface)
@@ -718,16 +709,6 @@ struct WorkerHomeView: View {
         formatWon(storePays.reduce(0) { $0 + $1.monthNetPay })
     }
 
-    private var totalRefundEstimateText: String {
-        let total = storePays.reduce(0.0) { partial, store in
-            let estimate = PayrollCalculator.estimateAnnualRefund(
-                monthlyTaxablePay: store.monthPay,
-                deductionType: store.deductionType
-            )
-            return partial + estimate.expectedRefund
-        }
-        return formatWon(total)
-    }
     @MainActor
     private func loadData(force: Bool) async {
         #if canImport(Supabase)

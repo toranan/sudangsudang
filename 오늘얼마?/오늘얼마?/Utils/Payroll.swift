@@ -3,7 +3,6 @@ import Foundation
 // Shared payroll math used by both Owner and Worker UIs.
 // Notes:
 // - "4대보험(예상)" uses employee-share estimates (see docs/korea_four_insurance_rates_2026_02.md).
-// - "환급금 계산(예상)" uses simplified income-tax rules (see docs/korea_refund_tax_reference_2026_02.md).
 // - We do not store "net pay" in DB; we store only the settings and compute on-device.
 
 enum PayrollDeductionType: String, CaseIterable, Identifiable, Codable {
@@ -39,14 +38,6 @@ struct PayrollDeductionBreakdown {
 
     var totalRate: Double { items.reduce(0) { $0 + $1.rate } }
     var totalDeduction: Double { items.reduce(0) { $0 + $1.amount } }
-}
-
-struct PayrollRefundEstimate {
-    let annualGross: Double
-    let annualWithholding: Double
-    let estimatedSettlementTax: Double
-    let expectedRefund: Double
-    let note: String
 }
 
 enum PayrollCalculator {
@@ -200,109 +191,6 @@ enum PayrollCalculator {
         cal.timeZone = AppTime.timeZone
         cal.firstWeekday = 2 // Monday
         return cal
-    }
-
-    static func estimateAnnualRefund(monthlyTaxablePay: Double, deductionType: PayrollDeductionType) -> PayrollRefundEstimate {
-        let annualGross = max(0, monthlyTaxablePay) * 12.0
-
-        // Refund estimate is meaningful when withholding(3.3%) was used.
-        guard deductionType == .withholding else {
-            return PayrollRefundEstimate(
-                annualGross: annualGross,
-                annualWithholding: 0,
-                estimatedSettlementTax: 0,
-                expectedRefund: 0,
-                note: "원천징수(3.3%) 기준에서만 환급을 추정해요."
-            )
-        }
-
-        let annualWithholding = annualGross * 0.033
-        let earnedIncomeDeduction = estimatedEarnedIncomeDeduction(annualGross: annualGross)
-        let earnedIncomeAmount = max(0, annualGross - earnedIncomeDeduction)
-        let taxBase = max(0, earnedIncomeAmount - 1_500_000) // 기본공제(본인)
-
-        let calculatedIncomeTax = progressiveIncomeTax(taxBase: taxBase)
-        let taxCredit = earnedIncomeTaxCredit(calculatedIncomeTax: calculatedIncomeTax, annualGross: annualGross)
-        let incomeTaxAfterCredit = max(0, calculatedIncomeTax - taxCredit)
-        let localIncomeTax = incomeTaxAfterCredit * 0.1
-        let estimatedSettlementTax = incomeTaxAfterCredit + localIncomeTax
-
-        return PayrollRefundEstimate(
-            annualGross: annualGross,
-            annualWithholding: annualWithholding,
-            estimatedSettlementTax: estimatedSettlementTax,
-            expectedRefund: max(0, annualWithholding - estimatedSettlementTax),
-            note: "2026년 2월 세법 기준 단순 추정치예요(본인 기본공제만 반영, 부양가족/특별공제 미반영)."
-        )
-    }
-
-    private static func estimatedEarnedIncomeDeduction(annualGross: Double) -> Double {
-        let gross = max(0, annualGross)
-        if gross <= 5_000_000 {
-            return gross * 0.7
-        }
-        if gross <= 15_000_000 {
-            return 3_500_000 + (gross - 5_000_000) * 0.4
-        }
-        if gross <= 45_000_000 {
-            return 7_500_000 + (gross - 15_000_000) * 0.15
-        }
-        if gross <= 100_000_000 {
-            return 12_000_000 + (gross - 45_000_000) * 0.05
-        }
-        return 14_750_000 + (gross - 100_000_000) * 0.02
-    }
-
-    private static func progressiveIncomeTax(taxBase: Double) -> Double {
-        let base = max(0, taxBase)
-        if base <= 14_000_000 {
-            return base * 0.06
-        }
-        if base <= 50_000_000 {
-            return 840_000 + (base - 14_000_000) * 0.15
-        }
-        if base <= 88_000_000 {
-            return 6_240_000 + (base - 50_000_000) * 0.24
-        }
-        if base <= 150_000_000 {
-            return 15_360_000 + (base - 88_000_000) * 0.35
-        }
-        if base <= 300_000_000 {
-            return 37_060_000 + (base - 150_000_000) * 0.38
-        }
-        if base <= 500_000_000 {
-            return 94_060_000 + (base - 300_000_000) * 0.40
-        }
-        if base <= 1_000_000_000 {
-            return 174_060_000 + (base - 500_000_000) * 0.42
-        }
-        return 384_060_000 + (base - 1_000_000_000) * 0.45
-    }
-
-    private static func earnedIncomeTaxCredit(calculatedIncomeTax: Double, annualGross: Double) -> Double {
-        let incomeTax = max(0, calculatedIncomeTax)
-        let baseCredit: Double
-        if incomeTax <= 1_300_000 {
-            baseCredit = incomeTax * 0.55
-        } else {
-            baseCredit = 715_000 + (incomeTax - 1_300_000) * 0.30
-        }
-
-        return min(baseCredit, earnedIncomeTaxCreditCap(annualGross: annualGross))
-    }
-
-    private static func earnedIncomeTaxCreditCap(annualGross: Double) -> Double {
-        let gross = max(0, annualGross)
-        if gross <= 33_000_000 {
-            return 740_000
-        }
-        if gross <= 70_000_000 {
-            return max(660_000, 740_000 - (gross - 33_000_000) * 0.008)
-        }
-        if gross <= 120_000_000 {
-            return max(500_000, 660_000 - (gross - 70_000_000) * 0.5)
-        }
-        return max(200_000, 500_000 - (gross - 120_000_000) * 0.5)
     }
 }
 

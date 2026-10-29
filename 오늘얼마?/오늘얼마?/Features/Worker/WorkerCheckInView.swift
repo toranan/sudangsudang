@@ -259,10 +259,6 @@ struct WorkerCheckInView: View {
                     }
 
                 historyEntryCard
-
-                if store.isPersonal {
-                    refundEstimateSection
-                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -518,54 +514,6 @@ struct WorkerCheckInView: View {
         }
     }
 
-    private var refundEstimateSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "환급금 계산")
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("연간 환산 급여")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(.appTextSecondary)
-                    Spacer()
-                    Text(formatWon(refundEstimate.annualGross))
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundColor(.appTextPrimary)
-                }
-                HStack {
-                    Text("원천징수 예상")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(.appTextSecondary)
-                    Spacer()
-                    Text(formatWon(refundEstimate.annualWithholding))
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundColor(.appTextPrimary)
-                }
-                HStack {
-                    Text("연말정산 예상세액")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(.appTextSecondary)
-                    Spacer()
-                    Text(formatWon(refundEstimate.estimatedSettlementTax))
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundColor(.appTextPrimary)
-                }
-                HStack {
-                    Text("예상 환급금")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundColor(.appTextPrimary)
-                    Spacer()
-                    Text(formatWon(refundEstimate.expectedRefund))
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundColor(.appAccent)
-                }
-                Text(refundEstimate.note)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundColor(.appTextSecondary)
-            }
-            .appCard()
-        }
-    }
-
 }
 
 private extension WorkerCheckInView {
@@ -604,13 +552,6 @@ private extension WorkerCheckInView {
         let date = PayrollPayday.nextPaydayDate(payday: payday)
         let formatter = AppTime.displayFormatter("M월 d일")
         return formatter.string(from: date)
-    }
-
-    var refundEstimate: PayrollRefundEstimate {
-        PayrollCalculator.estimateAnnualRefund(
-            monthlyTaxablePay: monthTaxablePayForEstimate(),
-            deductionType: deductionType
-        )
     }
 
     func monthNetPay() -> Double {
