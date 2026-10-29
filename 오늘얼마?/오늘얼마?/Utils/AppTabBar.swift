@@ -40,7 +40,7 @@ struct AppTabBar<Tag: Hashable>: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: item.systemImage)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                 if isSelected {
                     Text(item.title)
                         .font(.app(.callout, .bold))
@@ -50,7 +50,7 @@ struct AppTabBar<Tag: Hashable>: View {
             }
             .foregroundColor(isSelected ? .appInk : Color(red: 154/255, green: 160/255, blue: 169/255))
             .padding(.horizontal, isSelected ? 16 : 12)
-            .frame(height: 46)
+            .frame(height: 42)
             .background {
                 if isSelected {
                     Capsule()

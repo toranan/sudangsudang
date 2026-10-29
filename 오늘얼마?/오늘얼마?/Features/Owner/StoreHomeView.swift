@@ -169,9 +169,9 @@ struct StoreHomeView: View {
             }
         }
         .sheet(isPresented: $isPresentingInviteSheet) {
-            WorkerManagementView()
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            if let selectedStore {
+                StoreInviteSheet(storeId: selectedStore.id, storeName: selectedStore.name)
+            }
         }
         .alert("매장을 삭제하시겠습니까?", isPresented: $isShowingDeleteConfirm) {
             Button("삭제", role: .destructive) {
@@ -448,7 +448,7 @@ struct StoreHomeView: View {
 
     private var addStaffSection: some View {
         HStack(spacing: 10) {
-            actionTile(
+            ActionTile(
                 title: "초대 코드 보내기",
                 subtitle: "카톡으로 바로 공유",
                 systemImage: "paperplane",
@@ -457,7 +457,7 @@ struct StoreHomeView: View {
             ) {
                 isPresentingInviteSheet = true
             }
-            actionTile(
+            ActionTile(
                 title: "직접 직원 등록",
                 subtitle: "이름과 시급만 입력",
                 systemImage: "square.and.pencil",
@@ -468,40 +468,6 @@ struct StoreHomeView: View {
                 isPresentingCreateWorker = true
             }
         }
-    }
-
-    private func actionTile(
-        title: String,
-        subtitle: String,
-        systemImage: String,
-        tint: Color,
-        fill: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundColor(tint)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.appTextPrimary)
-                    Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundColor(.appTextSecondary)
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity)
-            .background(fill)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        }
-        .buttonStyle(PressableRowStyle())
     }
 
     @ViewBuilder
@@ -515,9 +481,9 @@ struct StoreHomeView: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "book.closed")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.appAccent)
-                        .frame(width: 40, height: 40)
+                        .frame(width: 36, height: 36)
                         .background(Color.appAccentSoft)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {

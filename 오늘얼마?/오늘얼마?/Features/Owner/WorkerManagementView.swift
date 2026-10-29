@@ -78,10 +78,8 @@ struct WorkerManagementView: View {
     @State private var manualMinutes: String = ""
     @State private var isSavingManual = false
     @State private var manualError: String?
-    @State private var inviteCode: String?
-    @State private var inviteLink: URL?
-    @State private var isCreatingInvite = false
     @State private var inviteError: String?
+    @State private var isPresentingInviteSheet = false
     @State private var isPresentingCreateWorker = false
     @State private var selectedMonth: Date = AppTime.calendar.date(from: AppTime.calendar.dateComponents([.year, .month], from: Date())) ?? Date()
     @State private var lastStoresLoadedAt: Date?
@@ -98,71 +96,34 @@ struct WorkerManagementView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 10) {
-                    SectionHeader(title: "초대 관리")
-                    if !stores.isEmpty {
+                    if stores.count > 1 {
                         storePicker
                     }
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("알바 초대를 빠르게")
-                            .font(.app(.body, .semibold))
-                        Text("초대코드를 공유해 연결할 수 있어요")
-                            .font(.app(.caption, .medium))
-                            .foregroundColor(.appTextSecondary)
-                        Button(action: {
-                            Task { await createInvite() }
-                        }) {
-                            Label("알바 초대하기", systemImage: "number")
+                    HStack(spacing: 10) {
+                        ActionTile(
+                            title: "초대 코드 보내기",
+                            subtitle: "매장 코드 공유",
+                            systemImage: "paperplane"
+                        ) {
+                            guard selectedStoreId != nil else { return }
+                            isPresentingInviteSheet = true
                         }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .disabled(selectedStoreId == nil || isCreatingInvite)
-                        .opacity(selectedStoreId == nil || isCreatingInvite ? 0.5 : 1.0)
-
-                        Button(action: {
+                        ActionTile(
+                            title: "직접 직원 등록",
+                            subtitle: "이름과 시급만 입력",
+                            systemImage: "square.and.pencil",
+                            tint: .appLavender,
+                            fill: .appLavenderSoft
+                        ) {
+                            guard selectedStoreId != nil else { return }
                             isPresentingCreateWorker = true
-                        }) {
-                            Label("알바 직접 등록", systemImage: "person.badge.plus")
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .disabled(selectedStoreId == nil)
-                        .opacity(selectedStoreId == nil ? 0.5 : 1.0)
-
-                        if let inviteCode {
-                            HStack(spacing: 8) {
-                                Text("초대코드: \(inviteCode)")
-                                    .font(.app(.body, .bold))
-                                    .foregroundColor(.appTextPrimary)
-                                Spacer()
-                                Button(action: {
-                                    self.inviteCode = nil
-                                    inviteLink = nil
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 18))
-                                        .foregroundColor(.appLine)
-                                }
-                            }
-                            .padding(.top, 6)
-
-                            ShareLink(item: inviteCode) {
-                                Label("초대코드 공유", systemImage: "square.and.arrow.up")
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                        }
-
-                        if let inviteLink {
-                            ShareLink(item: inviteLink) {
-                                Label("초대 링크 공유", systemImage: "link")
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                        }
-
-                        if let inviteError {
-                            Text(inviteError)
-                                .font(.app(.caption, .medium))
-                                .foregroundColor(.appWarning)
                         }
                     }
-                    .appCard()
+                    if let inviteError {
+                        Text(inviteError)
+                            .font(.app(.caption, .medium))
+                            .foregroundColor(.appWarning)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -263,6 +224,14 @@ struct WorkerManagementView: View {
             )
             .id(worker.id)
         }
+        .sheet(isPresented: $isPresentingInviteSheet) {
+            if let storeId = selectedStoreId {
+                StoreInviteSheet(
+                    storeId: storeId,
+                    storeName: stores.first(where: { $0.id == storeId })?.name ?? "내 매장"
+                )
+            }
+        }
         .sheet(isPresented: $isPresentingCreateWorker) {
             if let storeId = selectedStoreId {
                 CreateWorkerView(storeId: storeId) { name, phone, wage in
@@ -317,8 +286,6 @@ struct WorkerManagementView: View {
                     let isSelected = store.id == selectedStoreId
                     Button(action: {
                         selectedStoreId = store.id
-                        inviteCode = nil
-                        inviteLink = nil
                         Task { await loadWorkers(force: false) }
                     }) {
                         Text(store.name)
@@ -1020,25 +987,6 @@ struct WorkerManagementView: View {
 
     private func calcPay(minutes: Int, wage: Double) -> Double {
         Double(minutes) / 60.0 * wage
-    }
-
-
-    @MainActor
-    private func createInvite() async {
-        guard let storeId = selectedStoreId else { return }
-        #if canImport(Supabase)
-        isCreatingInvite = true
-        inviteError = nil
-        defer { isCreatingInvite = false }
-        do {
-            let expiresAt = AppTime.calendar.date(byAdding: .hour, value: 48, to: Date()) ?? Date()
-            let invite = try await SupabaseManager.shared.createInvite(storeId: storeId, expiresAt: expiresAt)
-            inviteCode = invite.token
-            inviteLink = URL(string: "howmuch://invite?token=\(invite.token)")
-        } catch {
-            inviteError = AppErrorMessage.userMessage(error)
-        }
-        #endif
     }
 }
 

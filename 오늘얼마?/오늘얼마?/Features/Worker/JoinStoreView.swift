@@ -25,8 +25,8 @@ struct JoinStoreView: View {
                     Text("초대코드")
                         .font(.app(.caption, .semibold))
                         .foregroundColor(.appTextSecondary)
-                    TextField("사장님이 보내준 초대코드를 입력", text: $token)
-                        .textInputAutocapitalization(.never)
+                    TextField("사장님이 보내준 매장 코드", text: $token)
+                        .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                         .appInputField()
                 }
@@ -38,7 +38,7 @@ struct JoinStoreView: View {
                 }
 
                 Button("추가하기") {
-                    let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
                     guard !trimmed.isEmpty else {
                         error = "초대코드를 입력해주세요."
                         return

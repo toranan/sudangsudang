@@ -463,7 +463,12 @@ final class SupabaseManager {
         let expires_at: String
     }
 
-    func createInvite(storeId: UUID, expiresAt: Date) async throws -> Invite {
+    func createInvite(
+        storeId: UUID,
+        expiresAt: Date,
+        codeLength: Int = 6,
+        alphabet: [Character] = Array("0123456789")
+    ) async throws -> Invite {
         let formatter = AppTime.iso
         let expiresAtISO = formatter.string(from: expiresAt)
 
@@ -471,7 +476,7 @@ final class SupabaseManager {
         for _ in 0..<5 {
             let payload = InviteInsert(
                 store_id: storeId,
-                token: generateInviteCode(),
+                token: generateInviteCode(length: codeLength, alphabet: alphabet),
                 expires_at: expiresAtISO
             )
 
@@ -501,9 +506,66 @@ final class SupabaseManager {
         )
     }
 
-    private func generateInviteCode() -> String {
-        let digits = Array("0123456789")
-        return String((0..<6).compactMap { _ in digits.randomElement() })
+    // 매장 고유 코드: 만료가 아주 먼 초대 하나를 매장 코드로 쓴다. 없으면 만든다.
+    // 예전의 48시간짜리 코드는 매장 코드로 보지 않는다.
+    func fetchOrCreateStoreCode(storeId: UUID) async throws -> String {
+        let longLivedAfter = AppTime.calendar.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+        let rows: [InviteRow] = try await client
+            .from("invites")
+            .select("id,store_id,token,expires_at")
+            .eq("store_id", value: storeId.uuidString)
+            .gt("expires_at", value: AppTime.iso.string(from: longLivedAfter))
+            .order("expires_at", ascending: false)
+            .limit(1)
+            .execute()
+            .value
+        if let existing = rows.first {
+            return existing.token
+        }
+        return try await createInvite(storeId: storeId, expiresAt: Self.storeCodeExpiry, codeLength: 6, alphabet: Self.storeCodeAlphabet).token
+    }
+
+    // 코드가 밖으로 퍼졌을 때 새 코드로 바꾼다. 이전 코드는 바로 막힌다.
+    func reissueStoreCode(storeId: UUID) async throws -> String {
+        struct ExpirePayload: Encodable { let expires_at: String }
+        let now = AppTime.iso.string(from: Date())
+        try await client
+            .from("invites")
+            .update(ExpirePayload(expires_at: now))
+            .eq("store_id", value: storeId.uuidString)
+            .gt("expires_at", value: now)
+            .execute()
+        let stillValid: [InviteRow] = try await client
+            .from("invites")
+            .select("id,store_id,token,expires_at")
+            .eq("store_id", value: storeId.uuidString)
+            .gt("expires_at", value: now)
+            .limit(1)
+            .execute()
+            .value
+        guard stillValid.isEmpty else {
+            throw NSError(
+                domain: "Invite",
+                code: 403,
+                userInfo: [NSLocalizedDescriptionKey: "이전 코드를 막지 못했어요. 잠시 후 다시 시도해주세요."]
+            )
+        }
+        return try await createInvite(storeId: storeId, expiresAt: Self.storeCodeExpiry, codeLength: 6, alphabet: Self.storeCodeAlphabet).token
+    }
+
+    private static let storeCodeExpiry: Date = {
+        var components = DateComponents()
+        components.year = 2099
+        components.month = 12
+        components.day = 31
+        return AppTime.calendar.date(from: components) ?? Date.distantFuture
+    }()
+
+    // 헷갈리는 글자(0/O, 1/I/L)는 뺀다. 6자리 × 31글자 ≈ 8억 가지.
+    private static let storeCodeAlphabet = Array("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
+
+    private func generateInviteCode(length: Int, alphabet: [Character]) -> String {
+        String((0..<length).compactMap { _ in alphabet.randomElement() })
     }
 
     private func isInviteTokenConflict(_ error: Error) -> Bool {

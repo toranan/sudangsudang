@@ -182,6 +182,7 @@ struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         PressableLabel(configuration: configuration) {
             configuration.label
+                .labelStyle(AppButtonLabelStyle())
                 .font(.app(.body, .bold))
                 .foregroundColor(foregroundColor ?? (backgroundColor == nil ? .appOnInk : .white))
                 .padding(.vertical, 17)
@@ -203,6 +204,17 @@ private struct PressableLabel<Content: View>: View {
             .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1.0) : 0.4)
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .animation(.spring(response: 0.25, dampingFraction: 0.8), value: configuration.isPressed)
+    }
+}
+
+// 버튼 안 아이콘은 글자보다 작게 둔다.
+struct AppButtonLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 6) {
+            configuration.icon
+                .font(.system(size: 14, weight: .semibold))
+            configuration.title
+        }
     }
 }
 
@@ -234,6 +246,7 @@ struct SecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         PressableLabel(configuration: configuration) {
             configuration.label
+                .labelStyle(AppButtonLabelStyle())
                 .font(.app(.body, .semibold))
                 .foregroundColor(foregroundColor)
                 .padding(.vertical, 17)
@@ -333,6 +346,43 @@ private struct RefreshIndicator: View {
         .frame(width: 20, height: 20)
         .padding(9)
         .background(.regularMaterial, in: Circle())
+    }
+}
+
+// 아이콘과 두 줄 글자를 가로로 놓은 옅은 색 타일 (직원 초대, 직접 등록 등).
+struct ActionTile: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    var tint: Color = .appAccent
+    var fill: Color = .appAccentSoft
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(tint)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.appTextPrimary)
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(.appTextSecondary)
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .background(fill)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(PressableRowStyle())
     }
 }
 
