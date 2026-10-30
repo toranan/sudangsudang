@@ -18,7 +18,7 @@ type StoreRagRequest =
     };
 
 type EmbeddingResponse = {
-  data?: Array<{ embedding?: number[] }>;
+  data?: Array<{ index?: number; embedding?: number[] }>;
   error?: { message?: string };
 };
 
@@ -49,7 +49,8 @@ const ANSWER_SYSTEM_PROMPT = [
   "너는 매장 내부 매뉴얼과 공지만 근거로 답하는 알바 업무 도우미다.",
   "주어진 문서에 없는 내용은 추측하지 말고, 문서에서 찾지 못했다고 말한 뒤 사장님께 확인해 보라고 안내한다.",
   "답변은 한국어로 짧고 구체적으로 쓴다. 순서가 있는 내용이면 번호를 붙인다.",
-  "마지막 줄에 참고한 문서 제목을 '참고: 제목' 형식으로 붙인다.",
+  "마지막 줄에 참고한 문서 제목을 '참고: 제목' 형식으로 붙인다. 여러 개면 쉼표로 구분한다.",
+  "문서에서 답을 찾지 못했으면 마지막 줄은 '참고: 없음'으로 쓴다.",
 ].join("\n");
 
 const corsHeaders = {
@@ -106,7 +107,12 @@ async function indexDocument(
     return json({ error: "Missing document fields" }, 400);
   }
 
-  const embedding = await createEmbedding(`${title}\n\n${content}`);
+  // 문서 전체 임베딩(조각이 없을 때의 예비용)과 조각 임베딩을 한 번에 만든다.
+  const chunks = splitIntoChunks(title, content);
+  const [embedding, ...chunkEmbeddings] = await createEmbeddings([
+    `${title}\n\n${content}`,
+    ...chunks,
+  ]);
   const rowPayload = {
     store_id: payload.storeId,
     title,
@@ -139,7 +145,59 @@ async function indexDocument(
     return json({ error: error.message }, 400);
   }
 
+  // 조각 저장이 실패해도 문서는 이미 저장됐고, 검색은 문서 전체 임베딩으로 돌아간다.
+  const documentId = (data as { id: string }).id;
+  const { error: deleteError } = await supabase
+    .from("store_document_chunks")
+    .delete()
+    .eq("document_id", documentId);
+  if (deleteError) {
+    console.error("store-rag: chunk delete failed", deleteError.message);
+  } else if (chunks.length > 0) {
+    const { error: chunkError } = await supabase
+      .from("store_document_chunks")
+      .insert(chunks.map((chunk, index) => ({
+        document_id: documentId,
+        store_id: payload.storeId,
+        chunk_index: index,
+        content: chunk,
+        embedding: chunkEmbeddings[index],
+      })));
+    if (chunkError) {
+      console.error("store-rag: chunk insert failed", chunkError.message);
+    }
+  }
+
   return json({ document: data }, 200);
+}
+
+const MAX_CHUNK_CHARS = 400;
+const MAX_CHUNKS = 100;
+
+// 매뉴얼은 한 줄에 한 단계씩 쓰는 경우가 많아서 줄 단위로 자른다.
+// 너무 긴 줄은 문장 단위로 다시 나누고, 조각마다 문서 제목을 붙여 어떤 문서의 내용인지 남긴다.
+function splitIntoChunks(title: string, content: string) {
+  const pieces: string[] = [];
+  for (const line of content.split(/\n+/).map((l) => l.trim()).filter(Boolean)) {
+    if (line.length <= MAX_CHUNK_CHARS) {
+      pieces.push(line);
+      continue;
+    }
+    let current = "";
+    for (const sentence of line.split(/(?<=[.!?。])\s+/)) {
+      if (current && current.length + sentence.length + 1 > MAX_CHUNK_CHARS) {
+        pieces.push(current);
+        current = "";
+      }
+      current = current ? `${current} ${sentence}` : sentence;
+      while (current.length > MAX_CHUNK_CHARS) {
+        pieces.push(current.slice(0, MAX_CHUNK_CHARS));
+        current = current.slice(MAX_CHUNK_CHARS);
+      }
+    }
+    if (current) pieces.push(current);
+  }
+  return pieces.slice(0, MAX_CHUNKS).map((piece) => `${title}: ${piece}`);
 }
 
 async function answerQuestion(
@@ -173,7 +231,7 @@ async function answerQuestion(
   const answer = await generateAnswer(question, rows);
   return json({
     answer,
-    sources: rows.map((row) => ({
+    sources: citedRows(answer, rows).map((row) => ({
       id: row.id,
       title: row.title,
       documentType: row.document_type,
@@ -182,7 +240,27 @@ async function answerQuestion(
   }, 200);
 }
 
+// 답변 마지막 '참고:' 줄에 적힌 문서만 출처로 보낸다.
+// 찾지 못했다고 답했는데 검색된 문서 제목이 출처로 붙는 것을 막는다.
+function citedRows(answer: string, rows: MatchRow[]) {
+  const citation = answer
+    .split("\n")
+    .map((line) => line.trim())
+    .reverse()
+    .find((line) => line.startsWith("참고:"));
+  if (!citation) return rows;
+  const cited = citation.slice("참고:".length).trim();
+  if (cited.startsWith("없음")) return [];
+  const matched = rows.filter((row) => cited.includes(row.title));
+  return matched.length > 0 ? matched : rows;
+}
+
 async function createEmbedding(input: string) {
+  const [embedding] = await createEmbeddings([input]);
+  return embedding;
+}
+
+async function createEmbeddings(inputs: string[]) {
   const response = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: {
@@ -191,7 +269,7 @@ async function createEmbedding(input: string) {
     },
     body: JSON.stringify({
       model: OPENAI_EMBEDDING_MODEL,
-      input: input.slice(0, 12000),
+      input: inputs.map((input) => input.slice(0, 12000)),
     }),
   });
 
@@ -200,11 +278,13 @@ async function createEmbedding(input: string) {
     throw new Error(body.error?.message ?? "Embedding request failed");
   }
 
-  const embedding = body.data?.[0]?.embedding;
-  if (!embedding) {
+  const embeddings = [...(body.data ?? [])]
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+    .map((item) => item.embedding);
+  if (embeddings.length !== inputs.length || embeddings.some((e) => !e)) {
     throw new Error("Embedding response missing vector");
   }
-  return embedding;
+  return embeddings as number[][];
 }
 
 async function generateAnswer(question: string, matches: MatchRow[]) {
