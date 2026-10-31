@@ -47,11 +47,16 @@ const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 const ANSWER_SYSTEM_PROMPT = [
   "너는 매장 내부 매뉴얼과 공지만 근거로 답하는 알바 업무 도우미다.",
-  "주어진 문서에 없는 내용은 추측하지 말고, 문서에서 찾지 못했다고 말한 뒤 사장님께 확인해 보라고 안내한다.",
+  "질문에 직접 답하는 내용만 쓴다. '참고로' 같은 곁가지 안내, 문서에 없는 제안이나 추측은 쓰지 않는다.",
+  "답에 쓰는 사실은 모두 문서를 인용해 근거를 붙인다.",
+  "문서에 질문의 답이 없으면 다른 말 없이 [없음]이라고만 쓴다.",
+  "질문의 일부만 문서에 있으면 있는 부분만 답하고, 마지막에 '나머지는 사장님께 확인해 보세요.'라고 쓴다.",
   "답변은 한국어로 짧고 구체적으로 쓴다. 순서가 있는 내용이면 번호를 붙인다.",
-  "마지막 줄에 참고한 문서 제목을 '참고: 제목' 형식으로 붙인다. 여러 개면 쉼표로 구분한다.",
-  "문서에서 답을 찾지 못했으면 마지막 줄은 '참고: 없음'으로 쓴다.",
 ].join("\n");
+
+const NOT_FOUND_MARK = "[없음]";
+// 문서에 답이 없다고 했거나 인용이 하나도 없는 답은 이 문구로 바꾼다.
+const NOT_FOUND_ANSWER = "등록된 문서에서 관련 내용을 찾지 못했어요. 사장님께 확인해 보세요.";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -222,37 +227,43 @@ async function answerQuestion(
 
   const rows = ((matches ?? []) as MatchRow[]).filter((row) => row.similarity >= 0.2);
   if (rows.length === 0) {
-    return json({
-      answer: "등록된 문서에서 관련 내용을 찾지 못했어요.",
-      sources: [],
-    }, 200);
+    return json({ answer: NOT_FOUND_ANSWER, sources: [] }, 200);
   }
 
-  const answer = await generateAnswer(question, rows);
-  return json({
-    answer,
-    sources: citedRows(answer, rows).map((row) => ({
+  const { answer, quotes } = await generateAnswer(question, rows);
+  if (quotes.length === 0 || answer.includes(NOT_FOUND_MARK)) {
+    return json({ answer: NOT_FOUND_ANSWER, sources: [] }, 200);
+  }
+
+  // 인용된 문서만 출처로 보내고, 문서마다 근거 문장을 붙인다.
+  const sources = rows
+    .map((row, index) => ({
       id: row.id,
       title: row.title,
       documentType: row.document_type,
       similarity: row.similarity,
-    })),
-  }, 200);
+      quotes: [...new Set(quotes.filter((q) => q.documentIndex === index).map((q) => q.text))],
+    }))
+    .filter((source) => source.quotes.length > 0);
+  return json({ answer, sources }, 200);
 }
 
-// 답변 마지막 '참고:' 줄에 적힌 문서만 출처로 보낸다.
-// 찾지 못했다고 답했는데 검색된 문서 제목이 출처로 붙는 것을 막는다.
-function citedRows(answer: string, rows: MatchRow[]) {
-  const citation = answer
-    .split("\n")
-    .map((line) => line.trim())
-    .reverse()
-    .find((line) => line.startsWith("참고:"));
-  if (!citation) return rows;
-  const cited = citation.slice("참고:".length).trim();
-  if (cited.startsWith("없음")) return [];
-  const matched = rows.filter((row) => cited.includes(row.title));
-  return matched.length > 0 ? matched : rows;
+type Quote = { documentIndex: number; text: string };
+
+// 인용문이 넘긴 문서에 그대로 있는지 다시 확인한 것만 근거로 쓴다.
+function verifiedQuotes(content: unknown[], rows: MatchRow[]): Quote[] {
+  const quotes: Quote[] = [];
+  for (const block of content as Array<{ type: string; citations?: Array<Record<string, unknown>> }>) {
+    if (block.type !== "text") continue;
+    for (const citation of block.citations ?? []) {
+      const index = citation.document_index as number;
+      const text = String(citation.cited_text ?? "").trim();
+      if (text && rows[index]?.content.includes(text)) {
+        quotes.push({ documentIndex: index, text });
+      }
+    }
+  }
+  return quotes;
 }
 
 async function createEmbedding(input: string) {
@@ -288,11 +299,14 @@ async function createEmbeddings(inputs: string[]) {
 }
 
 async function generateAnswer(question: string, matches: MatchRow[]) {
-  const context = matches
-    .map((row, index) =>
-      `[${index + 1}] ${row.title} (${row.document_type})\n${row.content.slice(0, 1800)}`
-    )
-    .join("\n\n");
+  // 문서마다 인용을 켜서 넘기면, 답변의 각 부분이 어느 문장을 근거로 했는지 함께 돌아온다.
+  const documents = matches.map((row) => ({
+    type: "document",
+    source: { type: "text", media_type: "text/plain", data: row.content },
+    title: row.title,
+    context: row.document_type === "notice" ? "매장 공지" : "매장 매뉴얼",
+    citations: { enabled: true },
+  }));
 
   const response = await anthropic.beta.messages.create({
     model: ANTHROPIC_MODEL,
@@ -305,7 +319,7 @@ async function generateAnswer(question: string, matches: MatchRow[]) {
     system: ANSWER_SYSTEM_PROMPT,
     messages: [{
       role: "user",
-      content: `<documents>\n${context}\n</documents>\n\n질문: ${question}`,
+      content: [...documents, { type: "text", text: `질문: ${question}` }],
     }],
   } as Parameters<typeof anthropic.beta.messages.create>[0]);
 
@@ -320,7 +334,7 @@ async function generateAnswer(question: string, matches: MatchRow[]) {
   if (!text) {
     throw new Error("Claude response missing answer");
   }
-  return text;
+  return { answer: text, quotes: verifiedQuotes(response.content, matches) };
 }
 
 function json(body: unknown, status: number) {

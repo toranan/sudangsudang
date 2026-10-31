@@ -19,7 +19,15 @@ struct WorkerStoreChatView: View {
         let id = UUID()
         let role: Role
         let content: String
-        var sources: [String] = []
+        var sources: [SourceRef] = []
+    }
+
+    // 답변의 근거가 된 문서와, 그 문서에서 인용한 문장
+    fileprivate struct SourceRef: Identifiable {
+        let id = UUID()
+        let documentId: UUID?
+        let title: String
+        var quotes: [String] = []
     }
 
     private struct AskRequest: Encodable {
@@ -30,13 +38,16 @@ struct WorkerStoreChatView: View {
 
     private struct AskResponse: Decodable {
         struct Source: Decodable {
+            let id: UUID?
             let title: String
+            let quotes: [String]?
         }
         let answer: String
         let sources: [Source]
     }
 
     private struct DocumentRow: Decodable {
+        let id: UUID
         let title: String
         let content: String
     }
@@ -52,6 +63,7 @@ struct WorkerStoreChatView: View {
     @State private var input = ""
     @State private var isAsking = false
     @State private var documents: [DocumentRow] = []
+    @State private var openedSource: SourceRef?
     @FocusState private var isInputFocused: Bool
 
     private var trimmedInput: String {
@@ -96,6 +108,18 @@ struct WorkerStoreChatView: View {
         .task {
             await loadDocuments()
         }
+        .sheet(item: $openedSource) { source in
+            CitedDocumentView(
+                title: source.title,
+                content: document(for: source)?.content,
+                quotes: source.quotes
+            )
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    private func document(for source: SourceRef) -> DocumentRow? {
+        documents.first { $0.id == source.documentId } ?? documents.first { $0.title == source.title }
     }
 
     // MARK: - Pieces
@@ -195,16 +219,9 @@ struct WorkerStoreChatView: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                     if !message.sources.isEmpty {
-                        HStack(spacing: 6) {
-                            ForEach(message.sources, id: \.self) { title in
-                                Label(title, systemImage: "doc.text")
-                                    .labelStyle(AppButtonLabelStyle())
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.appTextSecondary)
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(Color.appFill, in: Capsule())
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(message.sources) { source in
+                                sourceCard(source)
                             }
                         }
                     }
@@ -212,6 +229,43 @@ struct WorkerStoreChatView: View {
                 Spacer(minLength: 24)
             }
         }
+    }
+
+    // 근거 문서 카드. 누르면 원문에서 인용한 문장을 표시해 보여 준다.
+    private func sourceCard(_ source: SourceRef) -> some View {
+        Button {
+            dismissKeyboard()
+            openedSource = source
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(source.title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text("원문 보기")
+                        .font(.system(size: 11, weight: .medium))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .foregroundColor(.appTextSecondary)
+                ForEach(source.quotes.prefix(2), id: \.self) { quote in
+                    Text("“\(quote)”")
+                        .font(.system(size: 12))
+                        .foregroundColor(.appTextPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.appFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(PressableRowStyle())
+        .accessibilityLabel("\(source.title) 원문 보기")
     }
 
     private var typingRow: some View {
@@ -283,7 +337,7 @@ struct WorkerStoreChatView: View {
         #if canImport(Supabase)
         documents = (try? await SupabaseManager.shared.client
             .from("store_documents")
-            .select("title,content")
+            .select("id,title,content")
             .eq("store_id", value: storeId.uuidString)
             .execute()
             .value) ?? []
@@ -304,11 +358,11 @@ struct WorkerStoreChatView: View {
                 "store-rag",
                 options: FunctionInvokeOptions(body: AskRequest(action: "ask", storeId: storeId, question: question))
             )
-            var titles: [String] = []
-            for source in response.sources where !titles.contains(source.title) {
-                titles.append(source.title)
+            var sources: [SourceRef] = []
+            for source in response.sources where !sources.contains(where: { $0.title == source.title }) {
+                sources.append(SourceRef(documentId: source.id, title: source.title, quotes: source.quotes ?? []))
             }
-            messages.append(Message(role: .assistant, content: response.answer, sources: Array(titles.prefix(3))))
+            messages.append(Message(role: .assistant, content: response.answer, sources: Array(sources.prefix(3))))
             return
         } catch {
             // 서버 답변이 안 되면 불러온 문서에서 직접 찾아본다.
@@ -334,6 +388,116 @@ struct WorkerStoreChatView: View {
             return Message(role: .assistant, content: "등록된 문서에서 관련 내용을 찾지 못했어요.")
         }
         let preview = first.content.count > 160 ? String(first.content.prefix(160)) + "…" : first.content
-        return Message(role: .assistant, content: preview, sources: matches.prefix(3).map(\.title))
+        return Message(
+            role: .assistant,
+            content: preview,
+            sources: matches.prefix(3).map { SourceRef(documentId: $0.id, title: $0.title) }
+        )
+    }
+}
+
+// 챗봇 답변의 근거 문서 원문. 인용한 문장이 있는 줄을 표시하고 그 위치로 스크롤한다.
+private struct CitedDocumentView: View {
+    let title: String
+    let content: String?
+    let quotes: [String]
+
+    @Environment(\.dismiss) private var dismiss
+
+    private struct Line: Identifiable {
+        let id: Int
+        let text: String
+        let isCited: Bool
+    }
+
+    private var lines: [Line] {
+        guard let content else { return [] }
+        let quoteRanges = quotes.compactMap { content.range(of: $0) }
+        return content
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .enumerated()
+            .map { index, line in
+                let range = line.startIndex..<line.endIndex
+                return Line(
+                    id: index,
+                    text: String(line),
+                    isCited: quoteRanges.contains { $0.overlaps(range) }
+                )
+            }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("답변 근거")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.appAccent)
+                    Text(title)
+                        .font(.app(.headline, .bold))
+                        .foregroundColor(.appTextPrimary)
+                        .lineLimit(2)
+                }
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.appTextPrimary)
+                        .frame(width: 34, height: 34)
+                        .background(Color.appFill, in: Circle())
+                }
+                .buttonStyle(PressableRowStyle())
+                .accessibilityLabel("닫기")
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if content == nil {
+                            // 문서를 불러오지 못했으면 인용문만 보여 준다.
+                            ForEach(quotes, id: \.self) { quote in
+                                lineText(quote, isCited: true)
+                            }
+                        } else {
+                            ForEach(lines) { line in
+                                lineText(line.text, isCited: line.isCited)
+                                    .id(line.id)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .onAppear {
+                    if let first = lines.first(where: \.isCited) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            withAnimation(.easeOut(duration: 0.25)) {
+                                proxy.scrollTo(first.id, anchor: .center)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .background(Color.appSurface.ignoresSafeArea())
+    }
+
+    private func lineText(_ text: String, isCited: Bool) -> some View {
+        Text(text.isEmpty ? " " : text)
+            .font(.app(.callout, isCited ? .semibold : .regular))
+            .foregroundColor(.appTextPrimary)
+            .lineSpacing(4)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                isCited ? Color.appAccentSoft : Color.clear,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
     }
 }
