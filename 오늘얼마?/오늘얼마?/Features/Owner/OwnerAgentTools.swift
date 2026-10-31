@@ -125,6 +125,15 @@ struct OwnerAgentTools {
         let totalPendingCount: Int
         let totalPendingPay: Int
         let workers: [Worker]
+        // 매장 전체를 이번 달로 물었을 때만 있다. 사장님 홈의 '예상 인건비'와 같은 금액.
+        let homeEstimate: HomeEstimate?
+    }
+
+    private struct HomeEstimate: Encodable {
+        let basis: String
+        let workedPayIncludingPending: Int
+        let remainingScheduledPay: Int
+        let total: Int
     }
 
     // OwnerMonthlyDetailView와 같은 계산: 승인된 근무 + 주휴수당(일요일이 속한 달에 넣음).
@@ -152,6 +161,7 @@ struct OwnerAgentTools {
             ))
         }
 
+        let home = workerName == nil ? try await homeEstimate(monthStart: monthStart, workers: workers, logs: logs) : nil
         return MonthPayroll(
             month: monthFormatter.string(from: monthStart),
             basis: "승인된 근무 기준, 세전, 주휴수당 포함. 대기 중인 근무는 pending에 따로 있음",
@@ -159,7 +169,60 @@ struct OwnerAgentTools {
             totalApprovedHours: formatHours(totalMinutes),
             totalPendingCount: rows.reduce(0) { $0 + $1.pendingCount },
             totalPendingPay: rows.reduce(0) { $0 + $1.pendingPay },
-            workers: rows
+            workers: rows,
+            homeEstimate: home
+        )
+    }
+
+    // StoreHomeView의 '이번 달 예상 인건비'와 같은 계산. 이번 달이 아니면 nil.
+    // 승인·대기 근무(반려 제외) + 주휴수당 + 오늘 아직 기록이 없는 스케줄부터 말일까지의 스케줄.
+    private func homeEstimate(monthStart: Date, workers: [WorkerRow], logs: [LogRow]) async throws -> HomeEstimate? {
+        let now = Date()
+        guard calendar.isDate(monthStart, equalTo: now, toGranularity: .month) else { return nil }
+        let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? monthStart
+        let workersById = Dictionary(uniqueKeysWithValues: workers.map { ($0.id, $0) })
+
+        var worked: Double = 0
+        var loggedToday = Set<UUID>()
+        var allowanceLogs: [UUID: [LogRow]] = [:]
+        for log in logs where normalizedStatus(log.status) != "rejected" {
+            guard let start = AppTime.parseISO(log.check_in_at), let worker = workersById[log.worker_id] else { continue }
+            let end = log.check_out_at.flatMap(AppTime.parseISO)
+            if end != nil { allowanceLogs[log.worker_id, default: []].append(log) }
+            guard start >= monthStart, start < monthEnd else { continue }
+            if calendar.isDate(start, inSameDayAs: now) { loggedToday.insert(log.worker_id) }
+            guard let end else { continue }
+            worked += pay(log, worker: worker, start: start, end: end)
+        }
+        let active = workers.filter { $0.is_active ?? true }
+        for worker in active {
+            worked += PayrollCalculator.estimateWeeklyAllowancePay(
+                logs: allowanceLogs[worker.id] ?? [],
+                fallbackWage: worker.hourly_wage ?? 0,
+                fallbackApply: worker.apply_weekly_allowance ?? false,
+                attributedToMonth: monthStart
+            )
+        }
+
+        var remaining: Double = 0
+        for shift in try await plannedShifts(from: calendar.startOfDay(for: now), to: monthEnd, workers: active) {
+            if calendar.isDate(shift.start, inSameDayAs: now) && loggedToday.contains(shift.workerId) { continue }
+            guard let end = shift.end, let worker = workersById[shift.workerId] else { continue }
+            remaining += PayrollCalculator.grossPay(
+                checkIn: shift.start,
+                checkOut: end,
+                wage: worker.hourly_wage ?? 0,
+                applyNightAllowance: worker.apply_night_allowance ?? false,
+                breakPolicy: PayrollBreakPolicy(rawOrNone: worker.break_policy),
+                customBreakMinutes: worker.break_minutes ?? 0
+            )
+        }
+
+        return HomeEstimate(
+            basis: "사장님 홈의 '이번 달 예상 인건비'와 같은 계산. 승인·대기 근무와 주휴수당에, 남은 스케줄대로 일한다고 본 금액을 더한 예상치",
+            workedPayIncludingPending: Int(worked),
+            remainingScheduledPay: Int(remaining),
+            total: Int(worked + remaining)
         )
     }
 
