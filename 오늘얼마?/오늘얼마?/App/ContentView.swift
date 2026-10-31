@@ -182,6 +182,9 @@ struct ContentView: View {
     }
 
     private func restoreSessionIfPossible() async {
+        #if DEBUG
+        await DemoLogin.signInIfRequested()
+        #endif
         #if canImport(Supabase)
         do {
             if let snapshot = try await SupabaseManager.shared.restoreProfileSnapshotIfPossible() {
