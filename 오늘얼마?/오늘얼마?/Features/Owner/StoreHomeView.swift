@@ -11,6 +11,9 @@ struct StoreHomeView: View {
         let name: String
         let hourly_wage: Double?
         let apply_night_allowance: Bool?
+        let apply_weekly_allowance: Bool?
+        let break_policy: String?
+        let break_minutes: Int?
         let is_active: Bool?
     }
 
@@ -94,6 +97,7 @@ struct StoreHomeView: View {
     @State private var isPresentingCreateStore = false
     @State private var isPresentingCreateWorker = false
     @State private var isPresentingInviteSheet = false
+    @State private var isPresentingAgent = false
     @State private var isLoadingStores = false
     @State private var isLoadingSummary = false
     @State private var isUserRefreshing = false
@@ -133,6 +137,7 @@ struct StoreHomeView: View {
                         pendingBanner
                     }
                     laborCostCard
+                    agentRow
                     todaySection
                     addStaffSection
                     storeManagementRow
@@ -146,7 +151,7 @@ struct StoreHomeView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 10)
-            .padding(.bottom, 40)
+            .padding(.bottom, appTabBarReservedHeight + 24)
             .animation(.easeOut(duration: 0.2), value: pendingCount)
         }
         .appRefreshable {
@@ -172,6 +177,11 @@ struct StoreHomeView: View {
         .sheet(isPresented: $isPresentingInviteSheet) {
             if let selectedStore {
                 StoreInviteSheet(storeId: selectedStore.id, storeName: selectedStore.name)
+            }
+        }
+        .fullScreenCover(isPresented: $isPresentingAgent) {
+            if let selectedStore {
+                OwnerAgentView(storeId: selectedStore.id, storeName: selectedStore.name)
             }
         }
         .alert("매장을 삭제하시겠습니까?", isPresented: $isShowingDeleteConfirm) {
@@ -347,7 +357,7 @@ struct StoreHomeView: View {
                     .padding(.top, 8)
 
                     HStack {
-                        Text("지금까지 \(formatWon(actualPay))")
+                        Text("지금까지 \(formatWon(actualPay)) (대기 포함)")
                         Spacer()
                         Text("남은 예정 \(formatWon(projectedPay))")
                     }
@@ -474,6 +484,38 @@ struct StoreHomeView: View {
         }
     }
 
+    private var agentRow: some View {
+        Button {
+            isPresentingAgent = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.appAccent)
+                    .frame(width: 36, height: 36)
+                    .background(Color.appAccentSoft)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("AI 비서에게 물어보기")
+                        .font(.app(.body, .bold))
+                        .foregroundColor(.appTextPrimary)
+                    Text("인건비·주휴수당·스케줄을 물어보면 답해요")
+                        .font(.app(.caption))
+                        .foregroundColor(.appTextSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.appTextSecondary)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .background(Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+        }
+        .buttonStyle(PressableRowStyle())
+    }
+
     @ViewBuilder
     private var storeManagementRow: some View {
         if let selectedStore {
@@ -584,7 +626,7 @@ struct StoreHomeView: View {
         #endif
     }
 
-    struct LogRow: Decodable {
+    struct LogRow: Decodable, WeeklyAllowanceLogFields {
         let id: UUID
         let worker_id: UUID
         let check_in_at: String
@@ -592,6 +634,9 @@ struct StoreHomeView: View {
         let status: String?
         let workers: WorkerInfo?
         let applied_hourly_wage: Double?
+        let applied_break_policy: String?
+        let applied_break_minutes: Int?
+        let applied_weekly_allowance: Bool?
         let applied_night_allowance: Bool?
     }
 
@@ -626,6 +671,8 @@ struct StoreHomeView: View {
             let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
             let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? now
             let todayStart = calendar.startOfDay(for: now)
+            // 달을 걸친 주의 주휴수당을 계산하려고 앞뒤 주까지 받는다.
+            let allowanceLogRange = PayrollCalculator.weeklyAllowanceLogRange(forMonth: monthStart)
             let iso = AppTime.iso
             let dayFormatter = AppTime.displayFormatter("yyyy-MM-dd")
             let client = SupabaseManager.shared.client
@@ -633,15 +680,15 @@ struct StoreHomeView: View {
             // 이번 달 근무 기록, 직원, 남은 날짜 일정, 고정 스케줄을 동시에 받는다.
             async let logRows: [LogRow] = client
                 .from("work_logs")
-                .select("id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance,workers(name,hourly_wage,apply_night_allowance)")
+                .select("id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance,applied_break_policy,applied_break_minutes,applied_weekly_allowance,workers(name,hourly_wage,apply_night_allowance)")
                 .eq("store_id", value: storeId.uuidString)
-                .gte("check_in_at", value: iso.string(from: monthStart))
-                .lt("check_in_at", value: iso.string(from: monthEnd))
+                .gte("check_in_at", value: iso.string(from: allowanceLogRange.start))
+                .lt("check_in_at", value: iso.string(from: allowanceLogRange.end))
                 .execute()
                 .value
             async let workerRows: [HomeWorkerRow] = client
                 .from("workers")
-                .select("id,name,hourly_wage,apply_night_allowance,is_active")
+                .select("id,name,hourly_wage,apply_night_allowance,apply_weekly_allowance,break_policy,break_minutes,is_active")
                 .eq("store_id", value: storeId.uuidString)
                 .execute()
                 .value
@@ -675,6 +722,7 @@ struct StoreHomeView: View {
             var workedWorkers = Set<UUID>()
             var openSince: [UUID: (date: Date, name: String)] = [:]
             var loggedToday = Set<UUID>()
+            var allowanceRowsByWorker: [UUID: [LogRow]] = [:]
 
             for row in rows {
                 let status = normalizedStatus(row.status)
@@ -682,6 +730,10 @@ struct StoreHomeView: View {
                 let checkIn = dateParser.date(from: row.check_in_at) ?? iso.date(from: row.check_in_at) ?? now
                 let checkOut = row.check_out_at.flatMap { dateParser.date(from: $0) ?? iso.date(from: $0) }
                 let hasCheckout = !(row.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+                if hasCheckout {
+                    allowanceRowsByWorker[row.worker_id, default: []].append(row)
+                }
+                guard checkIn >= monthStart && checkIn < monthEnd else { continue }
 
                 if calendar.isDate(checkIn, inSameDayAs: now) {
                     loggedToday.insert(row.worker_id)
@@ -702,7 +754,7 @@ struct StoreHomeView: View {
 
                 // 승인 대기 건도 예상 인건비에는 포함한다 (반려만 제외).
                 let effectiveCheckOut = checkOut ?? checkIn
-                minutes += calcMinutes(checkIn: checkIn, checkOut: effectiveCheckOut)
+                minutes += PayrollCalculator.calcPaidMinutes(checkIn: checkIn, checkOut: effectiveCheckOut, appliedBreakPolicy: row.applied_break_policy, appliedBreakMinutes: row.applied_break_minutes)
                 workedWorkers.insert(row.worker_id)
                 pay += PayrollCalculator.grossPay(
                     checkIn: checkIn,
@@ -710,7 +762,19 @@ struct StoreHomeView: View {
                     appliedHourlyWage: row.applied_hourly_wage,
                     appliedNightAllowance: row.applied_night_allowance,
                     fallbackHourlyWage: row.workers?.hourly_wage ?? 0,
-                    fallbackNightAllowance: row.workers?.apply_night_allowance ?? false
+                    fallbackNightAllowance: row.workers?.apply_night_allowance ?? false,
+                    appliedBreakPolicy: row.applied_break_policy,
+                    appliedBreakMinutes: row.applied_break_minutes
+                )
+            }
+
+            // 직원 상세의 세전 합계와 같게 주휴수당을 더한다.
+            for (workerId, worker) in activeWorkers {
+                pay += PayrollCalculator.estimateWeeklyAllowancePay(
+                    logs: allowanceRowsByWorker[workerId] ?? [],
+                    fallbackWage: worker.hourly_wage ?? 0,
+                    fallbackApply: worker.apply_weekly_allowance ?? false,
+                    attributedToMonth: monthStart
                 )
             }
 
@@ -719,7 +783,7 @@ struct StoreHomeView: View {
                 to: monthEnd,
                 entries: entries,
                 templates: templates,
-                workers: activeWorkers
+                workerNames: activeWorkers.mapValues(\.name)
             )
 
             // 남은 예정: 오늘 아직 기록이 없는 근무 + 내일부터 말일까지.
@@ -732,7 +796,9 @@ struct StoreHomeView: View {
                     checkIn: shift.start,
                     checkOut: end,
                     wage: worker.hourly_wage ?? 0,
-                    applyNightAllowance: worker.apply_night_allowance ?? false
+                    applyNightAllowance: worker.apply_night_allowance ?? false,
+                    breakPolicy: PayrollBreakPolicy(rawOrNone: worker.break_policy),
+                    customBreakMinutes: worker.break_minutes ?? 0
                 )
             }
 
@@ -781,12 +847,13 @@ struct StoreHomeView: View {
     }
 
     // 스케줄 화면과 같은 규칙: 날짜별 일정이 있으면 그것을, 고정 스케줄로 아직 만들어지지 않은 날은 템플릿을 쓴다.
-    private static func plannedShifts(
+    // 일정 = 저장된 스케줄 + 아직 저장되지 않은 고정 스케줄. AI 비서도 같은 함수를 쓴다.
+    static func plannedShifts(
         from start: Date,
         to end: Date,
         entries: [HomeScheduleEntryRow],
         templates: [HomeScheduleTemplateRow],
-        workers: [UUID: HomeWorkerRow]
+        workerNames: [UUID: String]
     ) -> [PlannedShift] {
         let calendar = AppTime.calendar
         let dayFormatter = AppTime.displayFormatter("yyyy-MM-dd")
@@ -797,12 +864,12 @@ struct StoreHomeView: View {
             if let templateId = entry.template_id {
                 seededTemplateDays.insert("\(templateId.uuidString)|\(entry.work_date)")
             }
-            guard let worker = workers[entry.worker_id],
+            guard let name = workerNames[entry.worker_id],
                   let day = dayFormatter.date(from: entry.work_date),
                   let shiftStart = combine(day: day, time: entry.check_in_time) else { continue }
             shifts.append(PlannedShift(
                 workerId: entry.worker_id,
-                name: worker.name,
+                name: name,
                 start: shiftStart,
                 end: entry.check_out_time.flatMap { endTime(day: day, start: shiftStart, time: $0) }
             ))
@@ -814,11 +881,11 @@ struct StoreHomeView: View {
             let workDate = dayFormatter.string(from: cursor)
             for template in templates where template.weekday == weekday {
                 guard !seededTemplateDays.contains("\(template.id.uuidString)|\(workDate)"),
-                      let worker = workers[template.worker_id],
+                      let name = workerNames[template.worker_id],
                       let shiftStart = combine(day: cursor, time: template.check_in_time) else { continue }
                 shifts.append(PlannedShift(
                     workerId: template.worker_id,
-                    name: worker.name,
+                    name: name,
                     start: shiftStart,
                     end: template.check_out_time.flatMap { endTime(day: cursor, start: shiftStart, time: $0) }
                 ))
