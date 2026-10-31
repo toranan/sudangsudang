@@ -36,6 +36,7 @@ struct ApprovalView: View {
     @State private var isApplyingFocus = false
     @State private var selectedStoreId: UUID?
     @State private var pending: [LogRow] = []
+    @State private var rejectTarget: LogRow?
     @State private var recent: [LogRow] = []
     @State private var isLoading = false
     @State private var isUserRefreshing = false
@@ -113,7 +114,7 @@ struct ApprovalView: View {
 
                                         HStack(spacing: 8) {
                                             Button(action: {
-                                                Task { await updateStatus(item, status: "rejected") }
+                                                rejectTarget = item
                                             }) {
                                                 decisionLabel("반려", foreground: .appWarning, background: Color.appWarning.opacity(0.12))
                                             }
@@ -198,7 +199,9 @@ struct ApprovalView: View {
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+                .padding(.top, 12)
+                // 맨 아래 항목이 탭바에 가리지 않도록 탭바 높이만큼 비운다.
+                .padding(.bottom, appTabBarReservedHeight + 24)
             }
             .onChange(of: focus, initial: true) { _, newValue in
                 guard newValue != nil else { return }
@@ -207,6 +210,20 @@ struct ApprovalView: View {
         }
         .appRefreshable {
             await refreshFromUser()
+        }
+        // 반려는 되돌리기 어려워서 한 번 더 묻는다.
+        .confirmationDialog(
+            "이 근무를 반려할까요?",
+            isPresented: Binding(get: { rejectTarget != nil }, set: { if !$0 { rejectTarget = nil } }),
+            titleVisibility: .visible,
+            presenting: rejectTarget
+        ) { item in
+            Button("반려", role: .destructive) {
+                Task { await updateStatus(item, status: "rejected") }
+            }
+            Button("취소", role: .cancel) {}
+        } message: { item in
+            Text(formatDetail(item))
         }
         .background(Color.appBackground.ignoresSafeArea())
         .task {

@@ -24,6 +24,8 @@ struct WorkerCalendarView: View {
         let check_out_at: String?
         let status: String?
         let applied_hourly_wage: Double?
+        let applied_break_policy: String?
+        let applied_break_minutes: Int?
         let applied_night_allowance: Bool?
     }
 
@@ -290,7 +292,7 @@ struct WorkerCalendarView: View {
                                 .foregroundColor(row.statusColor)
                         }
                         Spacer()
-                        Text(row.status == "approved" ? formatWon(row.pay) : "미승인")
+                        Text(row.end != nil ? formatWon(row.pay) : "근무 중")
                             .font(.app(.callout, .bold))
                             .foregroundColor(row.status == "approved" ? .appTextPrimary : .appTextSecondary)
                     }
@@ -471,7 +473,7 @@ struct WorkerCalendarView: View {
             let rows: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
+                .select("id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance,applied_break_policy,applied_break_minutes")
                 .eq("worker_id", value: workerId.uuidString)
                 .gte("check_in_at", value: startISO)
                 .lt("check_in_at", value: endISO)
@@ -515,16 +517,23 @@ struct WorkerCalendarView: View {
 
             let checkIn = parser.date(from: row.check_in_at) ?? isoFormatter.date(from: row.check_in_at) ?? Date()
             let checkOut = row.check_out_at.flatMap { parser.date(from: $0) ?? isoFormatter.date(from: $0) }
-            let minutes = calcMinutes(checkIn: checkIn, checkOut: checkOut)
-            let isApproved = status == "approved" && checkOut != nil
-            let pay = isApproved
+            let minutes = PayrollCalculator.calcPaidMinutes(
+                checkIn: checkIn,
+                checkOut: checkOut,
+                appliedBreakPolicy: row.applied_break_policy,
+                appliedBreakMinutes: row.applied_break_minutes
+            )
+            // 내 기록 탭처럼 승인 대기 근무도 금액을 보여준다(반려는 위에서 뺐다).
+            let pay = checkOut != nil
                 ? PayrollCalculator.grossPay(
                     checkIn: checkIn,
                     checkOut: checkOut,
                     appliedHourlyWage: row.applied_hourly_wage,
                     appliedNightAllowance: row.applied_night_allowance,
                     fallbackHourlyWage: selectedWorkerHourlyWage,
-                    fallbackNightAllowance: selectedWorkerApplyNightAllowance
+                    fallbackNightAllowance: selectedWorkerApplyNightAllowance,
+                    appliedBreakPolicy: row.applied_break_policy,
+                    appliedBreakMinutes: row.applied_break_minutes
                 )
                 : 0
 
@@ -533,18 +542,12 @@ struct WorkerCalendarView: View {
         }
 
         let summaries = byDay.map { (date, rows) -> DaySummary in
-            let approvedRows = rows.filter { $0.status == "approved" }
-            let totalMinutes = approvedRows.reduce(0) { $0 + $1.minutes }
-            let totalPay = approvedRows.reduce(0) { $0 + $1.pay }
+            let totalMinutes = rows.reduce(0) { $0 + $1.minutes }
+            let totalPay = rows.reduce(0) { $0 + $1.pay }
             return DaySummary(date: date, totalMinutes: totalMinutes, totalPay: totalPay, rows: rows)
         }
 
         return summaries.sorted { $0.date < $1.date }
-    }
-
-    private func calcMinutes(checkIn: Date, checkOut: Date?) -> Int {
-        guard let out = checkOut else { return 0 }
-        return max(0, Int(floor(out.timeIntervalSince(checkIn) / 60.0)))
     }
 }
 

@@ -132,6 +132,21 @@ enum PayrollCalculator {
         return stay - breakMinutes(stayMinutes: stay, policy: breakPolicy, customMinutes: customBreakMinutes)
     }
 
+    // 근무 기록에 저장된 휴게 설정(applied_break_*)으로 유급 분을 구한다.
+    static func calcPaidMinutes(
+        checkIn: Date,
+        checkOut: Date?,
+        appliedBreakPolicy: String?,
+        appliedBreakMinutes: Int?
+    ) -> Int {
+        calcPaidMinutes(
+            checkIn: checkIn,
+            checkOut: checkOut,
+            breakPolicy: PayrollBreakPolicy(rawOrNone: appliedBreakPolicy),
+            customBreakMinutes: appliedBreakMinutes ?? 0
+        )
+    }
+
     static func grossPay(
         checkIn: Date,
         checkOut: Date?,
@@ -209,47 +224,117 @@ enum PayrollCalculator {
         return DateInterval(start: firstWeekStart, end: lastWeekEnd)
     }
 
+    // 근무 기록에 저장된 설정으로 주휴수당을 계산한다. 그 주 마지막 근무의 주휴 설정·시급을 쓰고,
+    // 저장된 값이 없는 기록(마이그레이션 전, 개인 매장)은 fallback(지금 설정)을 쓴다.
+    // 그래서 주휴 설정이나 시급을 바꿔도 지난 주 금액은 바뀌지 않는다.
+    static func estimateWeeklyAllowancePay<Log: WeeklyAllowanceLogFields>(
+        logs: [Log],
+        fallbackWage: Double,
+        fallbackApply: Bool,
+        useSnapshot: Bool = true,
+        attributedToMonth month: Date? = nil
+    ) -> Double {
+        weeklyAllowanceTotal(
+            logs.map {
+                WeeklyAllowanceInput(
+                    checkInAt: $0.check_in_at,
+                    checkOutAt: $0.check_out_at,
+                    breakPolicy: $0.applied_break_policy,
+                    breakMinutes: $0.applied_break_minutes,
+                    wage: useSnapshot ? $0.applied_hourly_wage : nil,
+                    apply: useSnapshot ? $0.applied_weekly_allowance : nil
+                )
+            },
+            fallbackWage: fallbackWage,
+            fallbackApply: fallbackApply,
+            month: month
+        )
+    }
+
     static func estimateWeeklyAllowancePay(
-        checkInOut: [(String, String?)],
+        checkInOut: [(String, String?, String?, Int?)],
         wage: Double,
         attributedToMonth month: Date? = nil
     ) -> Double {
+        weeklyAllowanceTotal(
+            checkInOut.map {
+                WeeklyAllowanceInput(checkInAt: $0.0, checkOutAt: $0.1, breakPolicy: $0.2, breakMinutes: $0.3, wage: nil, apply: nil)
+            },
+            fallbackWage: wage,
+            fallbackApply: true,
+            month: month
+        )
+    }
+
+    private struct WeeklyAllowanceInput {
+        let checkInAt: String
+        let checkOutAt: String?
+        let breakPolicy: String?
+        let breakMinutes: Int?
+        let wage: Double?
+        let apply: Bool?
+    }
+
+    private static func weeklyAllowanceTotal(
+        _ logs: [WeeklyAllowanceInput],
+        fallbackWage: Double,
+        fallbackApply: Bool,
+        month: Date?
+    ) -> Double {
         // Monday-Sunday estimate. A week is attributed to the month containing Sunday,
         // so a week crossing a month boundary is neither omitted nor counted twice.
-        var cal = Calendar(identifier: .gregorian)
-        cal.locale = Locale(identifier: "ko_KR")
-        cal.timeZone = AppTime.timeZone
-        cal.firstWeekday = 2 // Monday
+        let cal = weeklyCalendar()
 
-        let parser = AppTime.isoWithFractionalSeconds
-        let iso = AppTime.iso
-
-        var minutesByWeek: [Date: Int] = [:]
-        for (checkInAt, checkOutAt) in checkInOut {
-            guard let start = parser.date(from: checkInAt) ?? iso.date(from: checkInAt),
-                  let end = checkOutAt.flatMap({ parser.date(from: $0) ?? iso.date(from: $0) }),
+        struct Week {
+            var minutes = 0
+            var lastStart = Date.distantPast
+            var wage: Double?
+            var apply: Bool?
+        }
+        var weeks: [Date: Week] = [:]
+        for log in logs {
+            guard let start = AppTime.parseISO(log.checkInAt),
+                  let end = log.checkOutAt.flatMap(AppTime.parseISO),
                   end > start,
                   let weekStart = cal.dateInterval(of: .weekOfYear, for: start)?.start else {
                 continue
             }
-            let minutes = max(0, Int(floor(end.timeIntervalSince(start) / 60.0)))
-            minutesByWeek[weekStart, default: 0] += minutes
+            // 주 15시간 판단과 주휴 시간은 무급 휴게를 뺀 근로시간으로 계산한다.
+            var week = weeks[weekStart] ?? Week()
+            week.minutes += calcPaidMinutes(
+                checkIn: start,
+                checkOut: end,
+                breakPolicy: PayrollBreakPolicy(rawOrNone: log.breakPolicy),
+                customBreakMinutes: log.breakMinutes ?? 0
+            )
+            if start >= week.lastStart {
+                week.lastStart = start
+                week.wage = log.wage
+                week.apply = log.apply
+            }
+            weeks[weekStart] = week
         }
 
         var total: Double = 0
-        for (weekStart, weekMinutes) in minutesByWeek {
+        for (weekStart, week) in weeks {
             if let month {
                 guard let weeklyHoliday = cal.date(byAdding: .day, value: 6, to: weekStart),
                       cal.isDate(weeklyHoliday, equalTo: month, toGranularity: .month) else {
                     continue
                 }
             }
-            if weekMinutes < 15 * 60 { continue }
-            let weekHours = Double(weekMinutes) / 60.0
-            let allowanceHours = min(8.0, (weekHours / 40.0) * 8.0)
-            total += allowanceHours * wage
+            guard week.apply ?? fallbackApply else { continue }
+            total += weeklyAllowancePay(weekMinutes: week.minutes, wage: week.wage ?? fallbackWage)
         }
         return total
+    }
+
+    // 한 주 유급 근로시간이 15시간 이상이면 (주 시간 / 40 × 8)시간분, 최대 8시간분.
+    static func weeklyAllowancePay(weekMinutes: Int, wage: Double) -> Double {
+        guard weekMinutes >= 15 * 60 else { return 0 }
+        let weekHours = Double(weekMinutes) / 60.0
+        let allowanceHours = min(8.0, (weekHours / 40.0) * 8.0)
+        return allowanceHours * wage
     }
 
     private static func weeklyCalendar() -> Calendar {
@@ -259,6 +344,16 @@ enum PayrollCalculator {
         cal.firstWeekday = 2 // Monday
         return cal
     }
+}
+
+// 주휴수당 계산에 필요한 근무 기록 필드. 근무 기록 행 타입들이 따른다.
+protocol WeeklyAllowanceLogFields {
+    var check_in_at: String { get }
+    var check_out_at: String? { get }
+    var applied_hourly_wage: Double? { get }
+    var applied_break_policy: String? { get }
+    var applied_break_minutes: Int? { get }
+    var applied_weekly_allowance: Bool? { get }
 }
 
 struct PayrollLocalSettings: Codable, Equatable {

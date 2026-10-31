@@ -19,7 +19,7 @@ struct MyHistoryView: View {
         let is_personal: Bool?
     }
 
-    struct LogRow: Decodable, Identifiable {
+    struct LogRow: Decodable, Identifiable, WeeklyAllowanceLogFields {
         let id: UUID
         let store_id: UUID
         let worker_id: UUID
@@ -27,6 +27,9 @@ struct MyHistoryView: View {
         let check_out_at: String?
         let status: String?
         let applied_hourly_wage: Double?
+        let applied_break_policy: String?
+        let applied_break_minutes: Int?
+        let applied_weekly_allowance: Bool?
         let applied_night_allowance: Bool?
     }
 
@@ -45,6 +48,7 @@ struct MyHistoryView: View {
     @State private var monthWorkedText: String = "0시간"
     @State private var monthPayText: String = "0원"
     @State private var monthNetPayText: String = "0원"
+    @State private var monthPendingText: String?
     @State private var items: [WorkItem] = []
     @State private var isLoading = false
     @State private var isUserRefreshing = false
@@ -147,6 +151,10 @@ struct MyHistoryView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .contentTransition(.numericText())
+            // 합계는 승인된 근무만 센다. 대기 중인 근무는 따로 알려준다.
+            Text(monthPendingText ?? "승인된 근무 기준")
+                .font(.app(.caption, .medium))
+                .foregroundColor(.white.opacity(0.8))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 22)
@@ -291,6 +299,7 @@ struct MyHistoryView: View {
                 monthWorkedText = "0시간"
                 monthPayText = "0원"
                 monthNetPayText = "0원"
+                monthPendingText = nil
                 lastLoadedAt = now
                 return
             }
@@ -304,7 +313,7 @@ struct MyHistoryView: View {
             let logs: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,store_id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
+                .select("id,store_id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance,applied_break_policy,applied_break_minutes,applied_weekly_allowance")
                 .in("worker_id", values: workerIds)
                 .gte("check_in_at", value: iso.string(from: allowanceLogRange.start))
                 .lt("check_in_at", value: iso.string(from: allowanceLogRange.end))
@@ -341,7 +350,7 @@ struct MyHistoryView: View {
             for log in countedLogs {
                 let checkIn = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
                 let checkOut = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
-                let minutes = Self.calcMinutes(checkIn: checkIn, checkOut: checkOut)
+                let minutes = PayrollCalculator.calcPaidMinutes(checkIn: checkIn, checkOut: checkOut, appliedBreakPolicy: log.applied_break_policy, appliedBreakMinutes: log.applied_break_minutes)
                 totalMinutes += minutes
 
                 let worker = workerById[log.worker_id]
@@ -352,13 +361,43 @@ struct MyHistoryView: View {
                     appliedHourlyWage: log.applied_hourly_wage,
                     appliedNightAllowance: log.applied_night_allowance,
                     fallbackHourlyWage: wage,
-                    fallbackNightAllowance: applyNightAllowance(for: worker)
+                    fallbackNightAllowance: applyNightAllowance(for: worker),
+                    appliedBreakPolicy: log.applied_break_policy,
+                    appliedBreakMinutes: log.applied_break_minutes
                 )
                 totalPay += pay
             }
 
+            let pendingLogs = logs.filter { log in
+                guard normalizedStatus(log.status) == "pending",
+                      !(log.check_out_at?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true),
+                      let checkIn = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) else {
+                    return false
+                }
+                return checkIn >= monthStart && checkIn < monthEnd
+            }
+            let pendingPay = pendingLogs.reduce(0.0) { partial, log in
+                let checkIn = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
+                let checkOut = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
+                let worker = workerById[log.worker_id]
+                return partial + PayrollCalculator.grossPay(
+                    checkIn: checkIn,
+                    checkOut: checkOut,
+                    appliedHourlyWage: log.applied_hourly_wage,
+                    appliedNightAllowance: log.applied_night_allowance,
+                    fallbackHourlyWage: worker?.hourly_wage ?? 0,
+                    fallbackNightAllowance: applyNightAllowance(for: worker),
+                    appliedBreakPolicy: log.applied_break_policy,
+                    appliedBreakMinutes: log.applied_break_minutes
+                )
+            }
+            let pendingText = pendingLogs.isEmpty
+                ? nil
+                : "승인된 근무 기준 · 대기 \(pendingLogs.count)건 \(formatWon(pendingPay))은 승인되면 더해져요"
+
             // Net pay summary is computed per worker record (store-specific settings).
             var netTotal: Double = 0
+            var allowanceTotal: Double = 0
             let monthLogsByWorker = Dictionary(grouping: countedLogs, by: { $0.worker_id })
             let allowanceLogsByWorker = Dictionary(grouping: allowanceLogs, by: { $0.worker_id })
             for worker in workers {
@@ -374,7 +413,9 @@ struct MyHistoryView: View {
                         appliedHourlyWage: log.applied_hourly_wage,
                         appliedNightAllowance: log.applied_night_allowance,
                         fallbackHourlyWage: wage,
-                        fallbackNightAllowance: applyNightAllowance(for: worker)
+                        fallbackNightAllowance: applyNightAllowance(for: worker),
+                        appliedBreakPolicy: log.applied_break_policy,
+                        appliedBreakMinutes: log.applied_break_minutes
                     )
                 }
                 var applyWeekly = worker.apply_weekly_allowance ?? false
@@ -384,23 +425,25 @@ struct MyHistoryView: View {
                     applyWeekly = local.applyWeeklyAllowance
                     deductionType = local.deductionType
                 }
-                let weeklyAllowance = applyWeekly
-                    ? PayrollCalculator.estimateWeeklyAllowancePay(
-                        checkInOut: weeklyLogs.map { ($0.check_in_at, $0.check_out_at) },
-                        wage: wage,
-                        attributedToMonth: monthStart
-                    )
-                    : 0
+                // 개인 매장은 기기에 저장된 설정을 쓰므로 근무 기록의 주휴 설정은 보지 않는다.
+                let weeklyAllowance = PayrollCalculator.estimateWeeklyAllowancePay(
+                    logs: weeklyLogs,
+                    fallbackWage: wage,
+                    fallbackApply: applyWeekly,
+                    useSnapshot: worker.stores?.is_personal != true,
+                    attributedToMonth: monthStart
+                )
                 let breakdown = PayrollCalculator.deductionBreakdown(gross: gross + weeklyAllowance, type: deductionType)
                 let net = max(0, gross + weeklyAllowance - breakdown.totalDeduction)
                 netTotal += net
+                allowanceTotal += weeklyAllowance
             }
 
             // Render list items (first page only)
             for log in monthLogs.prefix(20) {
                 let checkIn = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
                 let checkOut = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
-                let minutes = Self.calcMinutes(checkIn: checkIn, checkOut: checkOut)
+                let minutes = PayrollCalculator.calcPaidMinutes(checkIn: checkIn, checkOut: checkOut, appliedBreakPolicy: log.applied_break_policy, appliedBreakMinutes: log.applied_break_minutes)
 
                 let worker = workerById[log.worker_id]
                 let wage = worker?.hourly_wage ?? 0
@@ -411,7 +454,9 @@ struct MyHistoryView: View {
                     appliedHourlyWage: log.applied_hourly_wage,
                     appliedNightAllowance: log.applied_night_allowance,
                     fallbackHourlyWage: wage,
-                    fallbackNightAllowance: applyNightAllowance(for: worker)
+                    fallbackNightAllowance: applyNightAllowance(for: worker),
+                    appliedBreakPolicy: log.applied_break_policy,
+                    appliedBreakMinutes: log.applied_break_minutes
                 )
 
                 let start = timeFormatter.string(from: checkIn)
@@ -437,8 +482,10 @@ struct MyHistoryView: View {
 
             guard loadRequest.isCurrent(requestID) else { return }
             monthWorkedText = formatHours(totalMinutes)
-            monthPayText = formatWon(totalPay)
+            // 세전에도 주휴수당을 넣어야 세후(주휴 포함, 공제 후)보다 작아 보이지 않는다.
+            monthPayText = formatWon(totalPay + allowanceTotal)
             monthNetPayText = formatWon(netTotal)
+            monthPendingText = pendingText
             items = rendered.sorted(by: { $0.startedAt > $1.startedAt })
             lastLoadedAt = now
         } catch {

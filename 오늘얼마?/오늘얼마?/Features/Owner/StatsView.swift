@@ -23,6 +23,8 @@ struct StatsView: View {
         let worker_id: UUID
         let workers: LogWorker?
         let applied_hourly_wage: Double?
+        let applied_break_policy: String?
+        let applied_break_minutes: Int?
         let applied_night_allowance: Bool?
     }
 
@@ -353,7 +355,7 @@ struct StatsView: View {
             let rows: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,check_in_at,check_out_at,status,worker_id,applied_hourly_wage,applied_night_allowance,workers(name,hourly_wage,apply_night_allowance)")
+                .select("id,check_in_at,check_out_at,status,worker_id,applied_hourly_wage,applied_night_allowance,applied_break_policy,applied_break_minutes,workers(name,hourly_wage,apply_night_allowance)")
                 .eq("store_id", value: storeId.uuidString)
                 .gte("check_in_at", value: startISO)
                 .lt("check_in_at", value: endISO)
@@ -405,7 +407,7 @@ struct StatsView: View {
             let checkIn = dateFormatter.date(from: row.check_in_at) ?? isoFormatter.date(from: row.check_in_at) ?? Date()
             let checkOut = row.check_out_at.flatMap { dateFormatter.date(from: $0) ?? isoFormatter.date(from: $0) }
             guard let checkOut else { continue }
-            let minutes = calcMinutes(checkIn: checkIn, checkOut: checkOut)
+            let minutes = PayrollCalculator.calcPaidMinutes(checkIn: checkIn, checkOut: checkOut, appliedBreakPolicy: row.applied_break_policy, appliedBreakMinutes: row.applied_break_minutes)
             let name = row.workers?.name ?? "알바"
             let wage = row.workers?.hourly_wage ?? 0
             let pay = PayrollCalculator.grossPay(
@@ -414,7 +416,9 @@ struct StatsView: View {
                 appliedHourlyWage: row.applied_hourly_wage,
                 appliedNightAllowance: row.applied_night_allowance,
                 fallbackHourlyWage: wage,
-                fallbackNightAllowance: row.workers?.apply_night_allowance ?? false
+                fallbackNightAllowance: row.workers?.apply_night_allowance ?? false,
+                appliedBreakPolicy: row.applied_break_policy,
+                appliedBreakMinutes: row.applied_break_minutes
             )
 
             let day = calendar.startOfDay(for: checkIn)

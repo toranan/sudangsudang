@@ -14,6 +14,7 @@ struct WorkerCheckInView: View {
     @State private var currentCheckInAt: Date?
     @State private var liveMinutes: Int = 0
     @State private var isLoadingAction: Bool = false
+    @State private var isConfirmingEarlyCheckOut = false
     @State private var actionError: String?
     @State private var monthLogsForNet: [WorkLogRow] = []
     @State private var isLoadingMonthLogsForNet = false
@@ -154,7 +155,12 @@ struct WorkerCheckInView: View {
             .foregroundColor(.appTextSecondary)
 
             Button(action: {
-                Task { await toggleCheckIn() }
+                // 출근하자마자 실수로 퇴근을 누르면 0분 기록이 승인 요청으로 가므로 한 번 더 묻는다.
+                if isCheckedIn, let start = currentCheckInAt, Date().timeIntervalSince(start) < 60 {
+                    isConfirmingEarlyCheckOut = true
+                } else {
+                    Task { await toggleCheckIn() }
+                }
             }) {
                 HStack(spacing: 8) {
                     if isLoadingAction {
@@ -169,6 +175,12 @@ struct WorkerCheckInView: View {
             .buttonStyle(PrimaryButtonStyle())
             .disabled(isLoadingAction)
             .padding(.top, 14)
+            .confirmationDialog("0분 근무예요. 저장할까요?", isPresented: $isConfirmingEarlyCheckOut, titleVisibility: .visible) {
+                Button("저장") { Task { await toggleCheckIn() } }
+                Button("취소", role: .cancel) {}
+            } message: {
+                Text("취소하면 출근 상태가 유지돼요.")
+            }
 
             Text(isCheckedIn ? "\(store.name)에서 근무 중" : "\(store.name) 출근 대기")
                 .font(.system(size: 12))
@@ -744,16 +756,19 @@ private extension WorkerCheckInView {
                 appliedHourlyWage: log.applied_hourly_wage,
                 appliedNightAllowance: log.applied_night_allowance,
                 fallbackHourlyWage: wage,
-                fallbackNightAllowance: applyNightAllowance
+                fallbackNightAllowance: applyNightAllowance,
+                appliedBreakPolicy: log.applied_break_policy,
+                appliedBreakMinutes: log.applied_break_minutes
             )
         }
-        let weeklyAllowance = applyWeeklyAllowance
-            ? PayrollCalculator.estimateWeeklyAllowancePay(
-                checkInOut: allowanceLogs.map { ($0.check_in_at, $0.check_out_at) },
-                wage: wage,
-                attributedToMonth: Date()
-            )
-            : 0
+        // 개인 매장은 기기에 저장된 설정을 쓰므로 근무 기록의 주휴 설정은 보지 않는다.
+        let weeklyAllowance = PayrollCalculator.estimateWeeklyAllowancePay(
+            logs: allowanceLogs,
+            fallbackWage: wage,
+            fallbackApply: applyWeeklyAllowance,
+            useSnapshot: !store.isPersonal,
+            attributedToMonth: Date()
+        )
         return max(0, gross + weeklyAllowance)
     }
 
@@ -1247,12 +1262,15 @@ private extension WorkerCheckInView {
         #endif
     }
 
-    struct WorkLogRow: Decodable, Identifiable {
+    struct WorkLogRow: Decodable, Identifiable, WeeklyAllowanceLogFields {
         let id: UUID
         let check_in_at: String
         let check_out_at: String?
         let status: String?
         let applied_hourly_wage: Double?
+        let applied_break_policy: String?
+        let applied_break_minutes: Int?
+        let applied_weekly_allowance: Bool?
         let applied_night_allowance: Bool?
     }
 
@@ -1269,7 +1287,7 @@ private extension WorkerCheckInView {
             let rows: [WorkLogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
+                .select("id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance,applied_break_policy,applied_break_minutes,applied_weekly_allowance")
                 .eq("store_id", value: store.id.uuidString)
                 .eq("worker_id", value: store.workerId.uuidString)
                 .gte("check_in_at", value: iso.string(from: allowanceLogRange.start))
@@ -1410,6 +1428,9 @@ private struct WorkerStoreHistoryView: View {
         let check_out_at: String?
         let status: String?
         let applied_hourly_wage: Double?
+        let applied_break_policy: String?
+        let applied_break_minutes: Int?
+        let applied_weekly_allowance: Bool?
         let applied_night_allowance: Bool?
     }
 
@@ -1529,7 +1550,7 @@ private struct WorkerStoreHistoryView: View {
             let rows: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
+                .select("id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance,applied_break_policy,applied_break_minutes,applied_weekly_allowance")
                 .eq("store_id", value: storeId.uuidString)
                 .eq("worker_id", value: workerId.uuidString)
                 .order("check_in_at", ascending: false)
@@ -1553,7 +1574,12 @@ private struct WorkerStoreHistoryView: View {
     private func totalMinutes(_ log: LogRow) -> Int {
         let start = parseDate(log.check_in_at)
         let end = log.check_out_at.map(parseDate(_:))
-        return PayrollCalculator.calcMinutes(checkIn: start, checkOut: end)
+        return PayrollCalculator.calcPaidMinutes(
+            checkIn: start,
+            checkOut: end,
+            appliedBreakPolicy: log.applied_break_policy,
+            appliedBreakMinutes: log.applied_break_minutes
+        )
     }
 
     private func totalPay(_ log: LogRow) -> Double {
@@ -1565,7 +1591,9 @@ private struct WorkerStoreHistoryView: View {
             appliedHourlyWage: log.applied_hourly_wage,
             appliedNightAllowance: log.applied_night_allowance,
             fallbackHourlyWage: hourlyWage,
-            fallbackNightAllowance: applyNightAllowance
+            fallbackNightAllowance: applyNightAllowance,
+            appliedBreakPolicy: log.applied_break_policy,
+            appliedBreakMinutes: log.applied_break_minutes
         )
     }
 

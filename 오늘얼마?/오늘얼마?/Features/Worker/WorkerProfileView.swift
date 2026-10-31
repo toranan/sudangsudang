@@ -52,6 +52,7 @@ struct WorkerProfileView: View {
                                     .font(.app(.caption))
                                     .foregroundColor(.appTextSecondary)
                                     .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
                             }
                         }
 

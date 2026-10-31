@@ -78,6 +78,15 @@ extension View {
         self.overlay(alignment: .bottom) {
             AppTabBarOverlay(selection: selection, items: items)
         }
+        // 스크롤한 내용이 상태바 시계와 겹쳐 보이지 않게 상태바 영역을 배경색으로 덮는다.
+        .overlay(alignment: .top) {
+            GeometryReader { proxy in
+                Color.appBackground
+                    .frame(height: proxy.safeAreaInsets.top)
+                    .offset(y: -proxy.safeAreaInsets.top)
+            }
+            .allowsHitTesting(false)
+        }
     }
 
     // 기본 탭바를 숨기고, 떠 있는 탭바 높이만큼 아래를 비운다. 내용은 탭바 뒤로 지나가며 끝까지 스크롤된다.

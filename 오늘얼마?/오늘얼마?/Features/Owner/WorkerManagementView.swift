@@ -35,13 +35,16 @@ struct WorkerManagementView: View {
         }
     }
 
-    struct WorkLogRow: Decodable, Identifiable {
+    struct WorkLogRow: Decodable, Identifiable, WeeklyAllowanceLogFields {
         let id: UUID
         let worker_id: UUID
         let check_in_at: String
         let check_out_at: String?
         let status: String?
         let applied_hourly_wage: Double?
+        let applied_break_policy: String?
+        let applied_break_minutes: Int?
+        let applied_weekly_allowance: Bool?
         let applied_night_allowance: Bool?
     }
 
@@ -523,7 +526,7 @@ struct WorkerManagementView: View {
             let rows: [WorkLogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
+                .select("id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance,applied_break_policy,applied_break_minutes,applied_weekly_allowance")
                 .eq("store_id", value: storeId.uuidString)
                 .gte("check_in_at", value: iso.string(from: allowanceLogRange.start))
                 .lt("check_in_at", value: iso.string(from: allowanceLogRange.end))
@@ -552,16 +555,25 @@ struct WorkerManagementView: View {
                 var pay: Double = 0
                 for log in logs {
                     let dates = parseWorkLogDates(checkIn: log.check_in_at, checkOut: log.check_out_at)
-                    minutes += PayrollCalculator.calcMinutes(checkIn: dates.start, checkOut: dates.end)
+                    minutes += PayrollCalculator.calcPaidMinutes(checkIn: dates.start, checkOut: dates.end, appliedBreakPolicy: log.applied_break_policy, appliedBreakMinutes: log.applied_break_minutes)
                     pay += PayrollCalculator.grossPay(
                         checkIn: dates.start,
                         checkOut: dates.end,
                         appliedHourlyWage: log.applied_hourly_wage,
                         appliedNightAllowance: log.applied_night_allowance,
                         fallbackHourlyWage: wage,
-                        fallbackNightAllowance: applyNightAllowance
+                        fallbackNightAllowance: applyNightAllowance,
+                        appliedBreakPolicy: log.applied_break_policy,
+                        appliedBreakMinutes: log.applied_break_minutes
                     )
                 }
+                // 직원 상세의 세전 합계와 같게 주휴수당을 더한다.
+                pay += PayrollCalculator.estimateWeeklyAllowancePay(
+                    logs: allowanceByWorker[worker.id] ?? [],
+                    fallbackWage: wage,
+                    fallbackApply: worker.apply_weekly_allowance ?? false,
+                    attributedToMonth: monthStart
+                )
                 payByWorker[worker.id] = pay
                 minutesByWorker[worker.id] = minutes
             }
@@ -1049,6 +1061,7 @@ struct WorkerDetailSheet: View {
                             .font(.app(.caption))
                             .foregroundColor(.appTextSecondary)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
                 Spacer(minLength: 8)
@@ -1082,9 +1095,10 @@ struct WorkerDetailSheet: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
             } else if detailTab == .net {
-                netView
+                ScrollView { netView }
             } else {
-                logsView
+                // 근무가 많은 달에는 내역이 길어져 위쪽 탭이 화면 밖으로 밀리므로 스크롤로 감싼다.
+                ScrollView { logsView }
             }
 
             Spacer()
@@ -1282,7 +1296,7 @@ struct WorkerDetailSheet: View {
     private var netView: some View {
         let wage = effectiveHourlyWage()
         let gross = monthGrossPay(wage: wage)
-        let weeklyAllowance = applyWeeklyAllowance ? estimateWeeklyAllowancePay(wage: wage) : 0
+        let weeklyAllowance = estimateWeeklyAllowancePay(wage: wage)
         let grossWithAllowance = gross + weeklyAllowance
         let breakdown = PayrollCalculator.deductionBreakdown(gross: grossWithAllowance, type: deductionType)
         let deduction = breakdown.totalDeduction
@@ -1300,6 +1314,7 @@ struct WorkerDetailSheet: View {
                     .font(.app(.caption, .medium))
                     .foregroundColor(.appTextSecondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .appCard()
 
             VStack(alignment: .leading, spacing: 10) {
@@ -1337,11 +1352,13 @@ struct WorkerDetailSheet: View {
     private var logsView: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("이번 달 지급액")
+                Text(applyWeeklyAllowance ? "이번 달 지급액 (세전, 주휴수당 포함)" : "이번 달 지급액 (세전)")
                     .font(.app(.caption, .semibold))
                     .foregroundColor(.appTextSecondary)
                 HStack(alignment: .bottom) {
-                    Text(formatWon(monthGrossPay(wage: effectiveHourlyWage())))
+                    // 알바 목록·세후금액 탭의 세전 합계와 같게 주휴수당을 더한다.
+                    Text(formatWon(monthGrossPay(wage: effectiveHourlyWage())
+                        + estimateWeeklyAllowancePay(wage: effectiveHourlyWage())))
                         .font(.app(.title, .bold))
                         .foregroundColor(.appTextPrimary)
                     Spacer()
@@ -1389,7 +1406,7 @@ struct WorkerDetailSheet: View {
                                 .font(.app(.caption, .medium))
                                 .foregroundColor(.appTextSecondary)
                             HStack {
-                                Text(formatHours(calcMinutes(checkIn: log.check_in_at, checkOut: log.check_out_at)))
+                                Text(formatHours(paidMinutes(log)))
                                     .font(.app(.caption, .medium))
                                     .foregroundColor(.appTextSecondary)
                                 Spacer()
@@ -1862,10 +1879,21 @@ struct WorkerDetailSheet: View {
     }
 
 
+    // 금액과 같은 기준이 되도록 무급 휴게를 뺀 시간을 보여준다.
     private func totalMinutes() -> Int {
         monthLogs.reduce(0) { partial, log in
-            partial + calcMinutes(checkIn: log.check_in_at, checkOut: log.check_out_at)
+            partial + paidMinutes(log)
         }
+    }
+
+    private func paidMinutes(_ log: WorkerManagementView.WorkLogRow) -> Int {
+        let dates = parseWorkLogDates(checkIn: log.check_in_at, checkOut: log.check_out_at)
+        return PayrollCalculator.calcPaidMinutes(
+            checkIn: dates.start,
+            checkOut: dates.end,
+            appliedBreakPolicy: log.applied_break_policy,
+            appliedBreakMinutes: log.applied_break_minutes
+        )
     }
     
     private func calcMinutes(checkIn: String, checkOut: String?) -> Int {
@@ -1896,7 +1924,9 @@ struct WorkerDetailSheet: View {
             appliedHourlyWage: log.applied_hourly_wage,
             appliedNightAllowance: log.applied_night_allowance,
             fallbackHourlyWage: wage,
-            fallbackNightAllowance: applyNightAllowance
+            fallbackNightAllowance: applyNightAllowance,
+            appliedBreakPolicy: log.applied_break_policy,
+            appliedBreakMinutes: log.applied_break_minutes
         )
     }
 
@@ -1922,8 +1952,9 @@ struct WorkerDetailSheet: View {
 
     private func estimateWeeklyAllowancePay(wage: Double) -> Double {
         PayrollCalculator.estimateWeeklyAllowancePay(
-            checkInOut: weeklyAllowanceLogs.map { ($0.check_in_at, $0.check_out_at) },
-            wage: wage,
+            logs: weeklyAllowanceLogs,
+            fallbackWage: wage,
+            fallbackApply: applyWeeklyAllowance,
             attributedToMonth: payrollMonth
         )
     }

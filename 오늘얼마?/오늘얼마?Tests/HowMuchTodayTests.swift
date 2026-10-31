@@ -67,13 +67,67 @@ final class HowMuchTodayTests: XCTestCase {
         XCTAssertEqual(pay, 16_500, accuracy: 0.001)
     }
 
+    // 체류 4시간씩 4일(16시간)이어도 법정 휴게 30분씩을 빼면 14시간이라 주휴수당이 없다.
+    func testWeeklyAllowanceUsesHoursAfterBreak() throws {
+        let days = ["2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08"]
+        let withoutBreak: [(String, String?, String?, Int?)] = days.map {
+            ("\($0)T09:00:00+09:00", "\($0)T13:00:00+09:00", nil, nil)
+        }
+        let withBreak: [(String, String?, String?, Int?)] = days.map {
+            ("\($0)T09:00:00+09:00", "\($0)T13:00:00+09:00", "statutory", nil)
+        }
+
+        XCTAssertEqual(PayrollCalculator.estimateWeeklyAllowancePay(checkInOut: withoutBreak, wage: 10_000), 32_000, accuracy: 0.001)
+        XCTAssertEqual(PayrollCalculator.estimateWeeklyAllowancePay(checkInOut: withBreak, wage: 10_000), 0, accuracy: 0.001)
+    }
+
+    private struct SnapshotLog: WeeklyAllowanceLogFields {
+        let check_in_at: String
+        let check_out_at: String?
+        let applied_hourly_wage: Double?
+        let applied_break_policy: String? = nil
+        let applied_break_minutes: Int? = nil
+        let applied_weekly_allowance: Bool?
+    }
+
+    // 주휴 설정을 끄거나 시급을 올려도, 지난 주는 그 주 근무에 남은 설정으로 계산한다.
+    func testWeeklyAllowanceUsesSnapshotOfEachWeek() throws {
+        // 9월 첫째 주: 주휴 켜짐·시급 10,000원으로 5시간씩 4일(20시간)
+        let pastWeek = ["2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10"].map {
+            SnapshotLog(check_in_at: "\($0)T09:00:00+09:00", check_out_at: "\($0)T14:00:00+09:00", applied_hourly_wage: 10_000, applied_weekly_allowance: true)
+        }
+        // 지금 설정은 주휴 꺼짐·시급 12,000원
+        XCTAssertEqual(
+            PayrollCalculator.estimateWeeklyAllowancePay(logs: pastWeek, fallbackWage: 12_000, fallbackApply: false),
+            40_000,
+            accuracy: 0.001
+        )
+        // 스냅샷이 없는 옛 기록은 지금 설정을 쓴다.
+        let legacy = pastWeek.map {
+            SnapshotLog(check_in_at: $0.check_in_at, check_out_at: $0.check_out_at, applied_hourly_wage: nil, applied_weekly_allowance: nil)
+        }
+        XCTAssertEqual(
+            PayrollCalculator.estimateWeeklyAllowancePay(logs: legacy, fallbackWage: 12_000, fallbackApply: true),
+            48_000,
+            accuracy: 0.001
+        )
+        // 주 중간에 바꾸면 그 주 마지막 근무의 설정을 쓴다.
+        var changed = pastWeek
+        changed[3] = SnapshotLog(check_in_at: changed[3].check_in_at, check_out_at: changed[3].check_out_at, applied_hourly_wage: 12_000, applied_weekly_allowance: false)
+        XCTAssertEqual(
+            PayrollCalculator.estimateWeeklyAllowancePay(logs: changed, fallbackWage: 12_000, fallbackApply: true),
+            0,
+            accuracy: 0.001
+        )
+    }
+
     func testWeeklyAllowanceCrossingMonthBelongsToSundayMonth() throws {
-        let logs: [(String, String?)] = [
-            ("2026-09-28T09:00:00+09:00", "2026-09-28T12:00:00+09:00"),
-            ("2026-09-29T09:00:00+09:00", "2026-09-29T12:00:00+09:00"),
-            ("2026-09-30T09:00:00+09:00", "2026-09-30T12:00:00+09:00"),
-            ("2026-10-01T09:00:00+09:00", "2026-10-01T12:00:00+09:00"),
-            ("2026-10-02T09:00:00+09:00", "2026-10-02T12:00:00+09:00"),
+        let logs: [(String, String?, String?, Int?)] = [
+            ("2026-09-28T09:00:00+09:00", "2026-09-28T12:00:00+09:00", nil, nil),
+            ("2026-09-29T09:00:00+09:00", "2026-09-29T12:00:00+09:00", nil, nil),
+            ("2026-09-30T09:00:00+09:00", "2026-09-30T12:00:00+09:00", nil, nil),
+            ("2026-10-01T09:00:00+09:00", "2026-10-01T12:00:00+09:00", nil, nil),
+            ("2026-10-02T09:00:00+09:00", "2026-10-02T12:00:00+09:00", nil, nil),
         ]
         let september = try makeDate("2026-09-01T00:00:00+09:00")
         let october = try makeDate("2026-10-01T00:00:00+09:00")

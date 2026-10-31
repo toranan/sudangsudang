@@ -173,6 +173,7 @@ struct PayrollDefaultsView: View {
     @State private var needsDatabaseUpdate = false
     @State private var loadError: String?
     @State private var saveMessage: String?
+    @State private var reapplyStoreId: UUID?
 
     var body: some View {
         ScrollView {
@@ -196,6 +197,17 @@ struct PayrollDefaultsView: View {
         .scrollDismissesKeyboard(.interactively)
         .task {
             await load()
+        }
+        .confirmationDialog(
+            "이번 달 근무에도 적용할까요?",
+            isPresented: Binding(get: { reapplyStoreId != nil }, set: { if !$0 { reapplyStoreId = nil } }),
+            titleVisibility: .visible,
+            presenting: reapplyStoreId
+        ) { storeId in
+            Button("이번 달 근무에도 적용") { Task { await reapplyThisMonth(storeId: storeId) } }
+            Button("앞으로의 근무만", role: .cancel) {}
+        } message: { _ in
+            Text("이번 달에 이미 기록된 근무는 바꾸기 전 설정으로 계산돼 있어요.")
         }
         .navigationTitle("급여 기본값")
         .navigationBarTitleDisplayMode(.inline)
@@ -301,7 +313,7 @@ struct PayrollDefaultsView: View {
                 }
                 .appCard()
 
-                Text("직원마다 다르게 하려면 알바관리 → 직원 → 설정에서 바꿀 수 있어요.")
+                Text("직원마다 다르게 하려면 알바관리 → 직원 → 설정에서 바꿀 수 있어요.\n연장근로(하루 8시간·주 40시간 초과)와 휴일근로 가산수당은 계산에 포함되지 않아요.")
                     .font(.app(.caption))
                     .foregroundColor(.appTextSecondary)
                     .padding(.horizontal, 4)
@@ -453,12 +465,36 @@ struct PayrollDefaultsView: View {
                 ))
                 .eq("id", value: resolved.id.uuidString)
                 .execute()
+            var changesLogTerms = false
             if let index = stores.firstIndex(where: { $0.id == resolved.id }) {
+                let old = stores[index]
+                // 근무 기록에 고정되는 값이 바뀌었을 때만 이번 달 근무에 다시 적용할지 묻는다.
+                changesLogTerms = old.default_hourly_wage != resolved.default_hourly_wage
+                    || old.default_apply_night_allowance != resolved.default_apply_night_allowance
+                    || old.default_apply_weekly_allowance != resolved.default_apply_weekly_allowance
+                    || old.default_break_policy != resolved.default_break_policy
+                    || old.default_break_minutes != resolved.default_break_minutes
                 stores[index] = resolved
             }
             select(resolved.id)
             Haptics.success()
-            saveMessage = "저장했어요. 매장 기본값을 따르는 직원에게 바로 적용돼요."
+            saveMessage = "저장했어요. 매장 기본값을 따르는 직원의 앞으로의 근무부터 적용돼요."
+            NotificationCenter.default.post(name: .payrollSettingsDidChange, object: nil)
+            if changesLogTerms { reapplyStoreId = resolved.id }
+        } catch {
+            Haptics.error()
+            loadError = AppErrorMessage.userMessage(error)
+        }
+        #endif
+    }
+
+    @MainActor
+    private func reapplyThisMonth(storeId: UUID) async {
+        #if canImport(Supabase)
+        do {
+            try await SupabaseManager.shared.reapplyPayrollTermsThisMonth(storeId: storeId, workerId: nil)
+            Haptics.success()
+            saveMessage = "이번 달 근무에도 적용했어요."
             NotificationCenter.default.post(name: .payrollSettingsDidChange, object: nil)
         } catch {
             Haptics.error()

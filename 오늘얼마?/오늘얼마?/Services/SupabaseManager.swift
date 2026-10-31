@@ -614,5 +614,15 @@ final class SupabaseManager {
             .rpc("retire_worker_link", params: ["p_worker_id": workerId.uuidString])
             .execute()
     }
+
+    // 이번 달에 이미 기록된 근무에 현재 급여 설정(시급, 야간수당, 무급 휴게)을 다시 적용한다.
+    // workerId가 nil이면 매장의 모든 직원.
+    func reapplyPayrollTermsThisMonth(storeId: UUID, workerId: UUID?) async throws {
+        var params = ["p_store_id": storeId.uuidString]
+        if let workerId { params["p_worker_id"] = workerId.uuidString }
+        _ = try await client
+            .rpc("reapply_payroll_terms_this_month", params: params)
+            .execute()
+    }
     #endif
 }

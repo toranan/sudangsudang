@@ -95,6 +95,11 @@ struct WorkerPayrollSettingsView: View {
     @State private var payday = PayrollLocalSettings.defaultPayday
     @State private var memo = ""
     @State private var savedMemo = ""
+    // 근무 기록에 고정되는 값(시급, 야간수당, 휴게). 저장 전후가 다르면 이번 달 근무에 다시 적용할지 묻는다.
+    @State private var snapshotTerms: SnapshotTerms?
+    @State private var isAskingReapply = false
+
+    @FocusState private var isWageFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -110,11 +115,20 @@ struct WorkerPayrollSettingsView: View {
                         .font(.app(.caption, .medium))
                         .foregroundColor(.appWarning)
                 }
+                Text("시급·야간수당·주휴수당·휴게를 바꾸면 앞으로의 근무부터 적용돼요.")
+                    .font(.app(.caption))
+                    .foregroundColor(.appTextSecondary)
                 Button(isSaving ? "저장 중..." : (savedMessage ?? "저장")) {
                     Task { await save() }
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(isSaving)
+                .confirmationDialog("이번 달 근무에도 적용할까요?", isPresented: $isAskingReapply, titleVisibility: .visible) {
+                    Button("이번 달 근무에도 적용") { Task { await reapplyThisMonth() } }
+                    Button("앞으로의 근무만", role: .cancel) {}
+                } message: {
+                    Text("이번 달에 이미 기록된 근무는 바꾸기 전 설정으로 계산돼 있어요.")
+                }
             }
         }
         .task {
@@ -162,10 +176,18 @@ struct WorkerPayrollSettingsView: View {
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
                             .font(.app(.callout, .bold))
-                            .frame(width: 80)
+                            .frame(minWidth: 80, maxWidth: 120)
+                            .focused($isWageFocused)
                         Text("원")
                             .font(.app(.callout))
                             .foregroundColor(.appTextSecondary)
+                        // 숫자 키패드에는 완료 키가 없어서, 입력 중에만 닫기 버튼을 보여준다.
+                        if isWageFocused {
+                            Button("완료") { isWageFocused = false }
+                                .font(.app(.caption, .semibold))
+                                .foregroundColor(.appAccent)
+                                .buttonStyle(.plain)
+                        }
                     }
                 }
                 MinimumWageHint(input: wageInput)
@@ -333,6 +355,7 @@ struct WorkerPayrollSettingsView: View {
             nightChoice = terms.apply_night_allowance_override.map { $0 ? "on" : "off" } ?? Self.storeChoice
             deductionChoice = terms.deduction_type_override ?? Self.storeChoice
             payday = min(max(terms.payday ?? PayrollLocalSettings.defaultPayday, 1), 31)
+            snapshotTerms = await fetchSnapshotTerms()
         } catch {
             guard !AppErrorMessage.isCancellation(error) else { return }
             await loadLegacy()
@@ -458,6 +481,50 @@ struct WorkerPayrollSettingsView: View {
             }
             Haptics.success()
             savedMessage = "저장했어요"
+            NotificationCenter.default.post(name: .payrollSettingsDidChange, object: nil)
+            let newTerms = await fetchSnapshotTerms()
+            if !isLegacy, let before = snapshotTerms, let newTerms, before != newTerms {
+                isAskingReapply = true
+            }
+            snapshotTerms = newTerms ?? snapshotTerms
+            await onSaved()
+        } catch {
+            errorMessage = AppErrorMessage.userMessage(error)
+        }
+        #endif
+    }
+
+    private struct SnapshotTerms: Decodable, Equatable {
+        let hourly_wage: Double?
+        let apply_night_allowance: Bool?
+        let apply_weekly_allowance: Bool?
+        let break_policy: String?
+        let break_minutes: Int?
+    }
+
+    private func fetchSnapshotTerms() async -> SnapshotTerms? {
+        #if canImport(Supabase)
+        return try? await SupabaseManager.shared.client
+            .from("workers")
+            .select("hourly_wage,apply_night_allowance,apply_weekly_allowance,break_policy,break_minutes")
+            .eq("id", value: workerId.uuidString)
+            .single()
+            .execute()
+            .value
+        #else
+        return nil
+        #endif
+    }
+
+    @MainActor
+    private func reapplyThisMonth() async {
+        #if canImport(Supabase)
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await SupabaseManager.shared.reapplyPayrollTermsThisMonth(storeId: storeId, workerId: workerId)
+            Haptics.success()
+            savedMessage = "이번 달 근무에도 적용했어요"
             NotificationCenter.default.post(name: .payrollSettingsDidChange, object: nil)
             await onSaved()
         } catch {

@@ -52,13 +52,16 @@ struct WorkerHomeView: View {
         let is_personal: Bool?
     }
 
-    struct LogRow: Decodable {
+    struct LogRow: Decodable, WeeklyAllowanceLogFields {
         let store_id: UUID
         let worker_id: UUID
         let check_in_at: String
         let check_out_at: String?
         let status: String?
         let applied_hourly_wage: Double?
+        let applied_break_policy: String?
+        let applied_break_minutes: Int?
+        let applied_weekly_allowance: Bool?
         let applied_night_allowance: Bool?
     }
 
@@ -824,7 +827,7 @@ struct WorkerHomeView: View {
             let logs: [LogRow] = try await SupabaseManager.shared
                 .client
                 .from("work_logs")
-                .select("store_id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance")
+                .select("store_id,worker_id,check_in_at,check_out_at,status,applied_hourly_wage,applied_night_allowance,applied_break_policy,applied_break_minutes,applied_weekly_allowance")
                 .in("worker_id", values: workerIds)
                 .gte("check_in_at", value: iso.string(from: allowanceLogRange.start))
                 .lt("check_in_at", value: iso.string(from: allowanceLogRange.end))
@@ -876,14 +879,16 @@ struct WorkerHomeView: View {
                 for log in countedLogs {
                     let checkIn = parser.date(from: log.check_in_at) ?? iso.date(from: log.check_in_at) ?? Date()
                     let checkOut = log.check_out_at.flatMap { parser.date(from: $0) ?? iso.date(from: $0) }
-                    let minutes = WorkerHomeView.calcMinutes(checkIn: checkIn, checkOut: checkOut)
+                    let minutes = PayrollCalculator.calcPaidMinutes(checkIn: checkIn, checkOut: checkOut, appliedBreakPolicy: log.applied_break_policy, appliedBreakMinutes: log.applied_break_minutes)
                     let gross = PayrollCalculator.grossPay(
                         checkIn: checkIn,
                         checkOut: checkOut,
                         appliedHourlyWage: log.applied_hourly_wage,
                         appliedNightAllowance: log.applied_night_allowance,
                         fallbackHourlyWage: wage,
-                        fallbackNightAllowance: applyNightAllowance
+                        fallbackNightAllowance: applyNightAllowance,
+                        appliedBreakPolicy: log.applied_break_policy,
+                        appliedBreakMinutes: log.applied_break_minutes
                     )
                     monthMinutes += minutes
                     monthGross += gross
@@ -893,13 +898,14 @@ struct WorkerHomeView: View {
                     }
                 }
 
-                let weeklyAllowance = applyWeeklyAllowance
-                    ? PayrollCalculator.estimateWeeklyAllowancePay(
-                        checkInOut: allowanceLogs.map { ($0.check_in_at, $0.check_out_at) },
-                        wage: wage,
-                        attributedToMonth: monthStart
-                    )
-                    : 0
+                // 개인 매장은 기기에 저장된 설정을 쓰므로 근무 기록의 주휴 설정은 보지 않는다.
+                let weeklyAllowance = PayrollCalculator.estimateWeeklyAllowancePay(
+                    logs: allowanceLogs,
+                    fallbackWage: wage,
+                    fallbackApply: applyWeeklyAllowance,
+                    useSnapshot: !isPersonal,
+                    attributedToMonth: monthStart
+                )
                 let breakdown = PayrollCalculator.deductionBreakdown(gross: monthGross + weeklyAllowance, type: deductionType)
                 let monthNet = max(0, monthGross + weeklyAllowance - breakdown.totalDeduction)
 
@@ -916,7 +922,8 @@ struct WorkerHomeView: View {
                     todayMinutes: todayMinutes,
                     todayPay: todayGross,
                     monthMinutes: monthMinutes,
-                    monthPay: monthGross,
+                    // 세전에도 주휴수당을 넣어 세후보다 작아 보이지 않게 한다.
+                    monthPay: monthGross + weeklyAllowance,
                     monthNetPay: monthNet
                 )
                 result.append(storePay)
