@@ -1,136 +1,127 @@
 # 수당수당
 
-소규모 사업장의 근태, 예상 급여, 운영 문서를 하나로 관리하는 iOS 앱입니다.
+사장님과 알바생이 **같은 근무 기록 하나**로 출퇴근, 승인, 예상 급여까지 확인하는 iOS 앱입니다.
 
-사장님과 알바생이 같은 근무 기록을 기준으로 승인과 정산을 진행하고, 매장별 공지와 매뉴얼은 근거 기반 챗봇으로 다시 활용합니다.
+- 매장 문서를 근거로 답하는 **알바생용 챗봇**
+- 말로 묻고 확인 후 저장하는 **사장님 AI 비서**
 
-## Screens
+[App Store에서 보기](https://apps.apple.com/kr/app/id6758724381) · 개인 프로젝트 · 2026.02 ~ 현재
 
-| 사장님 홈 | 근무 승인 | 알바생 캘린더 | 매장 챗봇 |
+| 사장님 홈 | 알바 출퇴근 | 직원별 급여 설정 | 매장 챗봇 |
 |---|---|---|---|
-| <img src="screenshot/owner/home.png" width="210" alt="사장님 홈"> | <img src="screenshot/owner/approval.png" width="210" alt="근무 승인"> | <img src="screenshot/worker/calendar.png" width="210" alt="알바생 근무 캘린더"> | <img src="screenshot/worker/chatbot.png" width="210" alt="매장 매뉴얼 챗봇"> |
+| <img src="screenshot/app/owner-home.png" width="200" alt="사장님 홈"> | <img src="screenshot/app/worker-checkin.png" width="200" alt="알바 출퇴근"> | <img src="screenshot/app/payroll-settings.png" width="200" alt="직원별 급여 설정"> | <img src="screenshot/app/chatbot-cite.png" width="200" alt="매장 챗봇"> |
 
-## Project
+## 왜 만들었나
 
-| 항목 | 내용 |
-|---|---|
-| 형태 | 개인 프로젝트, iOS 앱과 Supabase 백엔드 전담 |
-| 기간 | 2026.02 - 진행 중 |
-| 사용자 | 소규모 매장 사장님, 알바생 |
-| 현재 상태 | 핵심 사용자 흐름 구현, 급여 신뢰성 개선 진행 중 |
-| iOS | Swift, SwiftUI, Swift Concurrency, ActivityKit |
-| Backend | Supabase Auth, PostgreSQL, RLS, Edge Functions |
-| AI | OpenAI Embeddings, pgvector, Gemini |
-| 품질 상태 | 2026-07-17 Simulator 빌드 및 단위 테스트 5개 통과 |
+- **기록이 흩어져 있습니다.** 출퇴근은 종이나 카카오톡에, 근무 변경은 단톡방에 남아서 월말에 다시 모아야 합니다.
+- **급여를 두 번 계산합니다.** 사장님과 알바생이 각자 계산하다 보니 숫자가 다르면 어느 쪽이 맞는지 확인하기 어렵습니다.
+- **매장마다 운영 방식이 다릅니다.** 마감 순서 같은 규칙을 알바생이 바뀔 때마다 다시 알려 줘야 합니다.
 
-## Problems
+## 주요 기능
 
-- 카카오톡, 메모, 종이에 흩어진 출퇴근 기록은 승인과 정산 때 다시 확인해야 합니다.
-- 알바생은 급여가 어떻게 계산됐는지 알기 어렵고, 사장님은 조건 변경과 예외를 수기로 관리합니다.
-- 마감 순서와 매장 공지가 단체 채팅에 묻혀 같은 질문과 답변이 반복됩니다.
+**알바생**
+- 매장 코드(6자리)로 합류하고, 출근·퇴근 버튼으로 근무 기록
+- 잠금화면에서 근무 시간 확인 (Live Activity)
+- 달력에서 승인 상태와 이번 달 예상 급여(세전·세후) 확인
+- 매장 공지·매뉴얼 열람, 모르는 건 챗봇에 질문
 
-## Core Flows
+**사장님**
+- 근무 승인·반려, 월별 인건비 확인
+- 매장 기본값(시급, 야간·주휴수당, 휴게, 공제)을 정하고 직원별로 다르게 설정
+- 고정 근무 요일·시간을 정하면 달력에 일정 자동 표시
+- 공지·매뉴얼 등록 → 바로 챗봇의 근거가 됨
+- AI 비서에게 말로 묻고, 근무 추가·승인·결근 처리
 
-```text
-직원 초대 -> 출퇴근 기록 -> 사장님 승인 -> 월별 근무/급여 집계
-문서 등록 -> 매장별 벡터 검색 -> 근거 기반 답변 + 참고 문서
-```
+## 사장님 AI 비서
 
-### Owner
+메뉴를 찾아 들어가지 않고 **물어보고 바로 답을 듣게** 만든 기능입니다.
 
-- 매장 생성과 전환, 초대코드 발급, 직원 등록
-- 스케줄 관리, 근무 요청 승인/반려, 월별 정산 조회
-- 공지와 매뉴얼 등록, 수정, 삭제 및 챗봇 검색 확인
+> 물어보는 건 바로 답하고, 바꾸는 건 사장님이 확인해야 저장합니다.
 
-### Worker
+| 조회 | 직원 고르기 | 결근 처리 | 급여 설정 변경 |
+|---|---|---|---|
+| <img src="screenshot/app/ai-read.png" width="200" alt="인건비 조회"> | <img src="screenshot/app/ai-choose-worker.png" width="200" alt="직원 이름 버튼과 근무 추가 카드"> | <img src="screenshot/app/ai-absent.png" width="200" alt="사람마다 체크하는 결근 카드"> | <img src="screenshot/app/ai-settings.png" width="200" alt="적용 범위 버튼과 설정 변경 카드"> |
+| "이번 달 인건비 얼마야?" | 누구인지 이름 버튼으로 고름 | 사람마다 체크, 체크한 사람만 저장 | 언제부터 적용할지 버튼으로 고름 |
 
-- 초대코드로 매장 합류, 여러 근무지 전환
-- 출근/퇴근 기록, 승인 상태와 월별 내역 조회
-- 매장 공지/매뉴얼 열람, 문서 근거 챗봇 질의
+**AI가 바로 저장하지 못하게 했습니다**
 
-## Engineering Decisions
+1. AI가 "근무를 추가하자"고 판단해도 앱은 저장하지 않고 **확인 카드**만 띄웁니다.
+2. 직원·날짜·시각 중 하나라도 비면 카드를 만들지 않고 다시 묻습니다.
+3. 카드에는 무엇이 바뀌는지와 그 결과 **주휴수당·금액 변화**를 계산해 보여 줍니다.
+4. 사장님이 버튼을 눌러야 저장되고, AI는 실제로 저장된 것만 말합니다.
 
-### 1. `store_id` + RLS 기반 데이터 격리
+**AI가 쓸 수 있는 기능은 미리 정해 둔 13가지뿐입니다**
 
-매장 단위 데이터가 섞이면 급여와 운영 문서 모두 신뢰할 수 없습니다. 주요 테이블을 `store_id`로 연결하고, 소유 매장과 소속 매장을 기준으로 PostgreSQL RLS 정책을 분리했습니다. 앱의 필터만 신뢰하지 않고 DB를 최종 권한 경계로 사용합니다. [상세 문서](docs/case-studies/multi-tenant-rls.md)
+- 바로 하는 조회 6가지 — 직원 목록, 이번 달 급여, 주휴수당 조건, 승인 대기 근무, 근무 기록, 스케줄
+- 버튼으로 묻기 2가지 — 직원 고르기, 정해진 답 고르기. 답이 정해진 질문은 일일이 입력하지 않게 버튼으로 묻습니다.
+- 확인을 거쳐야 하는 저장 5가지 — 근무 추가, 근무 시간 수정, 승인·반려, 결근 처리, 급여 설정 변경
 
-### 2. KST 기준 시간 경계 통합
+삭제, 공제 변경, 지난달 이전 근무 수정은 열어 두지 않았습니다.
 
-기기 시간대에 따라 근무일, 월별 집계, 야간 구간이 달라질 수 있었습니다. `AppTime`에 `Asia/Seoul` 캘린더와 ISO 파서를 모으고 시간 경계 계산이 이를 사용하도록 정리했습니다. 포매터 캐시로 반복 생성 비용도 줄였습니다. [ADR](docs/adr/0001-kst-time-boundary.md)
+**구조** — Claude Sonnet이 어떤 기능을 쓸지 고르고(tool use), 실제 실행은 앱이 합니다. 금액은 앱 화면과 같은 급여 계산 코드로 계산하므로, AI가 말하는 금액과 화면의 금액이 같습니다. 서버 함수(`owner-agent`)는 요청한 사람이 그 매장 사장님인지 확인하고 Claude 호출만 대신합니다.
 
-### 3. 캐시와 새로고침 일관성
+## 매장 문서 챗봇 (RAG)
 
-화면 진입은 120초 TTL로 불필요한 재조회를 줄이되, 사용자가 당겨서 새로고침하면 캐시를 우회합니다. 매장·직원·월을 포함한 조회 키와 최신 요청 토큰을 함께 검증해 늦게 도착한 이전 응답이 현재 화면을 덮지 않도록 했습니다. [ADR](docs/adr/0003-refresh-consistency.md)
+범용 AI는 우리 매장 규칙을 모르고, 모르면 그럴듯하게 지어냅니다. 그래서 **그 매장 문서 안에서만** 근거를 찾아 답하게 했습니다.
 
-### 4. 매장 문서를 활용하는 RAG
+1. 사장님이 올린 문서를 줄 단위 조각으로 나눠 임베딩하고, 매장 ID와 함께 저장합니다.
+2. 질문이 오면 그 매장 문서 안에서만 비슷한 문서 5개를 찾습니다.
+3. Claude Sonnet이 그 문서만 보고 답하고, 답의 문장마다 근거가 된 문서 문장을 붙입니다.
+4. 근거 문장이 하나도 없는 답은 보여 주지 않고 "찾지 못했어요"로 바꿉니다.
+5. 알바생이 근거를 누르면 원문에서 그 문장이 강조되어 직접 확인할 수 있습니다.
 
-범용 챗봇은 매장별 규칙을 알 수 없습니다. Edge Function이 문서를 임베딩하고 `store_id`로 제한된 pgvector 검색 결과만 Gemini에 전달합니다. 답변에는 참고 문서 메타데이터를 함께 반환하며, 관련 문서가 없으면 추측하지 않습니다. [상세 문서](docs/case-studies/rag-pipeline.md)
+**직접 만든 질문 30개로 확인한 결과** (답이 있는 질문 15개, 없는 질문 15개)
 
-## Architecture
+- 줄 단위 조각으로 바꾼 뒤 정답 문서가 1등인 경우가 10/15 → 12/15로 늘었습니다.
+- 답이 있는 질문 15개는 모두 맞게 답했고, 답이 없는 질문 15개는 모두 "찾지 못했다"고 답했습니다.
+- 다른 매장 문서는 조회·검색·챗봇 모두 0건이었습니다. DB 보안(RLS)과 검색 함수가 둘 다 매장 범위를 제한합니다.
+
+질문 30개는 작은 세트라 경향을 본 정도이고, 실제 질문이 쌓이면 다시 측정할 예정입니다.
+
+## 급여를 믿을 수 있게
+
+- **시급을 바꿔도 지난 급여는 그대로입니다.** 근무가 저장되는 순간의 시급·야간수당·휴게 조건을 근무 기록에 함께 저장(스냅샷)합니다.
+- **사장님과 알바생이 같은 계산 코드**를 씁니다. 그래서 두 화면의 금액이 같습니다.
+- **휴게는 없음 / 법정 / 직접 입력 중에서 고릅니다.** 법정 휴게를 강제로 빼면 실제 매장 운영과 숫자가 어긋나서, 매장과 직원별로 고르게 했습니다.
+
+## 구조
 
 ```mermaid
 flowchart LR
-    App[SwiftUI iOS App] --> Auth[Supabase Auth / Kakao]
+    App[iOS 앱 SwiftUI] --> Auth[Supabase Auth]
     App --> DB[(PostgreSQL + RLS)]
-    App --> Edge[Supabase Edge Functions]
-    Edge --> Embedding[OpenAI Embeddings]
-    Edge --> Gemini[Gemini]
-    Edge --> DB
-    DB --> Vector[pgvector / store_documents]
+    App --> RAG[store-rag 함수]
+    App --> Agent[owner-agent 함수]
+    RAG --> Embed[OpenAI 임베딩]
+    RAG --> Vector[(pgvector)]
+    RAG --> Claude[Claude Sonnet]
+    Agent --> Claude
 ```
 
-## Quality And Verification
+| 분야 | 기술 |
+|---|---|
+| iOS | Swift, SwiftUI, Swift Concurrency, ActivityKit |
+| Backend | Supabase Auth, PostgreSQL, RLS, Edge Functions |
+| AI | OpenAI text-embedding-3-small, pgvector, Claude Sonnet |
 
-- 중복 출근 방지: `(store_id, worker_id)`의 열린 근무 기록에 부분 유니크 인덱스 적용
-- 시간 무결성: 퇴근 시간이 출근 시간보다 빠를 수 없도록 DB 제약 적용
-- 권한 경계: 사장님과 알바생의 RLS 정책과 화면을 역할별로 분리
-- 빌드: generic iOS 대상 서명 없는 Debug `xcodebuild` 성공
-- 테스트: 급여 스냅샷·야간수당·최신 요청 검증 단위 테스트 5개 통과
-- 보안: 커스텀 접근 토큰은 Keychain에 저장하고 기존 평문 토큰을 자동 마이그레이션
-- 잔여 경고: 구식 SwiftUI `onChange` API를 새 형식으로 이전할 필요가 있음
+AI 키는 모두 서버 함수에만 두고, 앱에는 넣지 않습니다.
 
-### Known Limitations
-
-급여 기능은 현재 **참고용 예상치**입니다. 2026-07-15 코드 감사에서 소득 구분과 세금/4대보험 모델, 과거 근로조건 스냅샷, 주휴수당 판정, 최저임금 검증, 화면별 합계 불일치를 확인했습니다. 오류를 숨기기보다 재현 가능한 개선 과제로 관리하고 있습니다.
-
-- [급여 신뢰성 개선 사례](docs/case-studies/payroll-reliability.md)
-- [급여 정확성 감사 로그](docs/devlog/2026-07-15-payroll-accuracy-audit.md)
-- [근로조건/급여 스냅샷 제안](docs/adr/0002-payroll-snapshot.md)
-
-## Roadmap
-
-- 소득 구분, 근로소득세, 사회보험을 독립 축으로 재설계
-- 유효기간 근로조건과 승인 급여 스냅샷 도입
-- 주휴수당 판정 재설계와 급여 계산 단위 테스트 추가
-- RLS 통합 테스트와 RAG 평가 질문 세트 구축
-
-전체 계획은 [ROADMAP.md](ROADMAP.md), 사용자 관점 변경 이력은 [CHANGELOG.md](CHANGELOG.md)에서 관리합니다.
-
-## Run Locally
+## 실행 방법
 
 1. Xcode에서 `오늘얼마?/오늘얼마?.xcodeproj`를 엽니다.
-2. `Config/Secrets.xcconfig`에 Supabase와 Kakao 로컬 설정을 추가합니다.
-3. Supabase migration과 Edge Function secret을 적용합니다.
-4. iOS Simulator 또는 실제 기기에서 실행합니다.
+2. `Config/Secrets.xcconfig`에 Supabase와 Kakao 로컬 설정을 넣습니다.
+3. DB 마이그레이션과 서버 함수를 배포합니다.
 
 ```bash
 supabase db push
 supabase secrets set --env-file Config/.env
 supabase functions deploy store-rag
+supabase functions deploy owner-agent
 ```
 
-```bash
-xcodebuild \
-  -project './오늘얼마?/오늘얼마?.xcodeproj' \
-  -scheme '오늘얼마?' \
-  -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath /private/tmp/howmuchtoday-dd \
-  build
-```
+## 더 보기
 
-## Documentation
-
-- [개발 과정](docs/development_process.md)
-- [기술 스택과 선택 근거](docs/tech_stack.md)
-- [DB 스키마 요약](docs/schema_summary.md)
-- [API 호출 규칙](docs/api_rules.md)
+- [매장별 데이터 분리 (RLS)](docs/case-studies/multi-tenant-rls.md)
+- [급여 신뢰성 개선](docs/case-studies/payroll-reliability.md)
+- [한국 시간 기준 날짜 계산](docs/adr/0001-kst-time-boundary.md)
+- [변경 이력](CHANGELOG.md)
